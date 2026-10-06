@@ -1,0 +1,14 @@
+[package]
+name = "docs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lib]
+name = "docs"
+path = "src/lib.rs"
+
+[dependencies]
+vhp-common.workspace = true
+clap.workspace = true
+chrono.workspace = true

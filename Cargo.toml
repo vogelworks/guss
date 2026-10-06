@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/aws",
+    "crates/docs",
+    "crates/net",
+    "crates/build",
+    "crates/deploy",
+    "crates/setup",
+    "crates/project",
+    "crates/guss",
+    "cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["VHP"]
+
+[workspace.dependencies]
+# Shared internal crates
+vhp-common = { path = "crates/common" }
+docs = { path = "crates/docs" }
+aws = { path = "crates/aws" }
+
+# Third-party, pinned once for the whole workspace
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+colored = "2"
+anyhow = "1"
+chrono = "0.4"
+postgres = "0.19"
+saphyr = "0.0.11"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+base64 = "0.22"
+rustyline = "14"
+ratatui = "0.27"
+crossterm = "0.27"
+tempfile = "3"
+pathdiff = "0.2"

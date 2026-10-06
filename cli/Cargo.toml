@@ -1,0 +1,23 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+# The umbrella command is `vhp`.
+[[bin]]
+name = "vhp"
+path = "src/main.rs"
+
+[dependencies]
+vhp-common.workspace = true
+clap.workspace = true
+
+# Every task lib.
+build = { path = "../crates/build" }
+deploy = { path = "../crates/deploy" }
+net = { path = "../crates/net" }
+docs = { path = "../crates/docs" }
+setup = { path = "../crates/setup" }
+project = { path = "../crates/project" }
+guss = { path = "../crates/guss" }

@@ -1,0 +1,15 @@
+[package]
+name = "guss"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lib]
+name = "guss"
+path = "src/lib.rs"
+
+[dependencies]
+vhp-common.workspace = true
+clap.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true

@@ -1,0 +1,9 @@
+[package]
+name = "aws"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+vhp-common.workspace = true
+serde_json.workspace = true

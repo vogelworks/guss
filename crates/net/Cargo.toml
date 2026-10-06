@@ -1,0 +1,15 @@
+[package]
+name = "net"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[lib]
+name = "net"
+path = "src/lib.rs"
+
+[dependencies]
+vhp-common.workspace = true
+aws.workspace = true
+clap.workspace = true
+saphyr.workspace = true

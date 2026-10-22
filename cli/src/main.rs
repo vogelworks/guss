@@ -1,21 +1,14 @@
-//! `vhp` — the umbrella CLI for the VHP admin tools.
-//!
 //! Each subcommand flattens a task crate's own `Args` and dispatches to its
-//! `run`, so `vhp deploy portal webserver dev` runs exactly the same code as the
-//! standalone `deploy portal webserver dev`. Task logic lives in the task crates;
-//! this file is only wiring — plus the single login/permission check
-//! (`vhp_common::auth::enforce`) that runs before every dispatch.
+//! `run`, so `guss docs create <name>` runs exactly the same code as the
+//! standalone `docs create <name>`. Task logic lives in the task crates;
+//! this file is only wiring
+//! (`guss_common::auth::enforce`) that runs before every dispatch.
 
 use clap::{CommandFactory, Parser, Subcommand};
-use vhp_common::{Result, config};
+use guss_common::{Result, config};
 
 #[derive(Parser)]
-#[command(
-    name = "vhp",
-    about = "VHP Portal admin tools",
-    version,
-    propagate_version = true
-)]
+#[command(name = "guss", about = "guss Portal admin tools", version, propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -43,7 +36,7 @@ fn main() -> Result<()> {
     // If no command provided, default to interactive shell (guss)
     if let Some(cmd) = &command {
         if let Some(key) = permission_key(cmd) {
-            vhp_common::auth::enforce(&key)?;
+            guss_common::auth::enforce(&key)?;
         }
     }
 

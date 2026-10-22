@@ -9,7 +9,7 @@ name = "setup"
 path = "src/lib.rs"
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 clap.workspace = true
 # Release publishing/updating: TOML manifest, ed25519 signatures, HTTP download.
 serde.workspace = true

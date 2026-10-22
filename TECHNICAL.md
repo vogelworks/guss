@@ -1,6 +1,6 @@
-# VHP Tools — Technical Reference
+# guss Tools — Technical Reference
 
-Architecture, implementation, and development guide for the `vhp` CLI.
+Architecture, implementation, and development guide for the `guss` CLI.
 
 ---
 
@@ -9,7 +9,7 @@ Architecture, implementation, and development guide for the `vhp` CLI.
 ### One Binary, One Dispatch Point
 
 ```
-vhp (cli/src/main.rs)
+guss (cli/src/main.rs)
 ├── net:        cluster connection + branch management
 ├── build:      app builds + publishing
 ├── deploy:     service images + rollout (including ECS)
@@ -37,7 +37,7 @@ guss/
     ├── common/src/
     │   ├── proc.rs           all subprocess calls route here
     │   ├── paths.rs          all filesystem paths (repo + config)
-    │   ├── config.rs         ~/.config/vhp/config.toml (settings)
+    │   ├── config.rs         ~/.config/guss/config.toml (settings)
     │   ├── git.rs            git operations
     │   ├── docker.rs         docker build/push/run
     │   ├── clusters.rs       cluster definitions and resolution
@@ -60,12 +60,12 @@ guss/
 
 ## Configuration & State
 
-### Settings: `~/.config/vhp/config.toml`
+### Settings: `~/.config/guss/config.toml`
 
 Located **outside any checkout** so a machine can support multiple checkouts.
 
 ```toml
-root                   = "/path/to/project-vhp"    # primary checkout
+root                   = "/path/to/project-guss"    # primary checkout
 vapi_root              = "/path/to/project-vapi"   # optional
 mode                   = "dev|test|prod"           # deployment mode
 ssh_key                = "id_ed25519"              # optional (default)
@@ -88,10 +88,10 @@ Settings are **never cached** — `setup init` writes the file, then the same pr
 
 | What | Location | Writable | Purpose |
 |------|----------|----------|---------|
-| Config | `~/.config/vhp/` | Yes | Settings, keys, tokens |
-| Device key | `~/.config/vhp/device.key` (0600) | Yes | ed25519 pair (auth login) |
-| Session token | `~/.config/vhp/token.toml` (0600) | Yes | Cached 30-day token |
-| Release key | `~/.config/vhp/release.key` (0600) | Yes | Signing key (publish only) |
+| Config | `~/.config/guss/` | Yes | Settings, keys, tokens |
+| Device key | `~/.config/guss/device.key` (0600) | Yes | ed25519 pair (auth login) |
+| Session token | `~/.config/guss/token.toml` (0600) | Yes | Cached 30-day token |
+| Release key | `~/.config/guss/release.key` (0600) | Yes | Signing key (publish only) |
 | SSH keys | `~/.ssh/` | Yes | Git + Docker SSH (assumed to exist) |
 
 ---
@@ -108,7 +108,7 @@ Three modes, each with a corresponding branch:
 | **prod** | `prod` | production, requires version tag |
 | **test** | flexible | testing, any branch except `prod` |
 
-### Mode Switching: `vhp net mode <mode>`
+### Mode Switching: `guss net mode <mode>`
 
 When mode changes, the following repos are checked out and pulled:
 
@@ -170,12 +170,12 @@ Benefits:
 Never hardcode or build paths from `$HOME`. Use functions from `paths::`:
 
 ```rust
-let root = paths::project_vhp()?;        // via config or probe
+let root = paths::project_guss()?;        // via config or probe
 let webserver = paths::webserver_dir()?; // <root>/webserver
 let network = paths::network_dir()?;     // <root>/network
 ```
 
-Why: older code hardcoded `~/project-vhp` and silently operated on a different tree when a checkout was elsewhere. `paths::` centralizes the resolution logic.
+Why: older code hardcoded `~/project-guss` and silently operated on a different tree when a checkout was elsewhere. `paths::` centralizes the resolution logic.
 
 ### `dry_run: bool` is Always Last
 
@@ -261,12 +261,12 @@ Non-prod builds skip this entirely. Prod builds commit **after** deployment succ
 
 ### How It Works
 
-1. **Device key** (`~/.config/vhp/device.key`, generated once per machine):
+1. **Device key** (`~/.config/guss/device.key`, generated once per machine):
    - Ed25519 keypair for challenge signing
    - Device identifies itself to the login server by signing a challenge
    - No password involved
 
-2. **Session token** (`~/.config/vhp/token.toml`):
+2. **Session token** (`~/.config/guss/token.toml`):
    - Valid **30 days offline**
    - Cached after successful login
    - Checked once per invocation (at dispatch, before subcommand logic runs)
@@ -284,10 +284,10 @@ Non-prod builds skip this entirely. Prod builds commit **after** deployment succ
 ### Login Flow
 
 ```bash
-vhp setup login <user>       # challenge-response via device key
+guss setup login <user>       # challenge-response via device key
                              # caches token for 30 days
-vhp setup status             # who's logged in, what's allowed
-vhp setup logout             # clear the token
+guss setup status             # who's logged in, what's allowed
+guss setup logout             # clear the token
 ```
 
 ---
@@ -300,7 +300,7 @@ vhp setup logout             # clear the token
 # Rust (pinned by rust-toolchain.toml)
 rustup install 1.97.0
 
-# Optional: GitHub CLI (for PR creation in vhp project)
+# Optional: GitHub CLI (for PR creation in guss project)
 sudo apt install gh
 
 # For publishing releases (cross-compile to musl)
@@ -330,9 +330,9 @@ vt require_confirm                   # by name substring
 For isolation:
 
 ```bash
-VHP_ROOT=/tmp/nope vhp deploy --help                        # override project root
-XDG_CONFIG_HOME=/tmp/alt/.config vhp setup status           # alt config
-vfresh setup init --root ~/vhp/project-vhp --no-pull --yes  # test first-run
+guss_ROOT=/tmp/nope guss deploy --help                        # override project root
+XDG_CONFIG_HOME=/tmp/alt/.config guss setup status           # alt config
+vfresh setup init --root ~/guss/project-guss --no-pull --yes  # test first-run
 ```
 
 (Shortcuts `v`, `vb`, `vt`, `vfresh` are installed in `~/.bashrc` by the tool itself.)
@@ -350,8 +350,8 @@ Not on GitHub. Releases are directories on a central HTTP server:
 ├── dev/
 │   ├── manifest.toml               # version, filename, sha256, target
 │   ├── manifest.toml.sig           # detached ed25519 signature
-│   └── vhp-<version>-x86_64-...tar.gz
-│       vhp-<version>-x86_64-...tar.gz.sig
+│   └── guss-<version>-x86_64-...tar.gz
+│       guss-<version>-x86_64-...tar.gz.sig
 └── prod/
     ├── manifest.toml
     ├── manifest.toml.sig
@@ -361,15 +361,15 @@ Not on GitHub. Releases are directories on a central HTTP server:
 ### Publishing a Release
 
 ```bash
-vhp project release finish <version>  # tag the version
-vhp setup publish prod --dry-run      # inspect the build + upload sequence
-vhp setup publish prod                # build, sign, upload
+guss project release finish <version>  # tag the version
+guss setup publish prod --dry-run      # inspect the build + upload sequence
+guss setup publish prod                # build, sign, upload
 ```
 
 Guards:
 - Working tree must be clean
 - HEAD must be tagged for the version in `Cargo.toml`
-- The publishing machine has its own signing key (via `vhp setup keygen`)
+- The publishing machine has its own signing key (via `guss setup keygen`)
 
 ### Verification Order
 
@@ -423,7 +423,7 @@ Nothing is extracted before it has been verified.
    name = "<name>"
 
    [dependencies]
-   vhp-common = { path = "../common" }
+   guss-common = { path = "../common" }
    # (deps from [workspace.dependencies] only)
    ```
 
@@ -433,7 +433,7 @@ Nothing is extracted before it has been verified.
    ```rust
    //! Task description.
    
-   use vhp_common::error::Result;
+   use guss_common::error::Result;
 
    #[derive(clap::Args)]
    pub struct NameArgs { ... }
@@ -458,7 +458,7 @@ No `tempfile` or `tests/` directories. Use `#[cfg(test)] mod tests` inline.
 
 | Reads the world | Pure logic (testable) |
 |---|---|
-| `paths::project_vhp()` | `resolve_root(home)` |
+| `paths::project_guss()` | `resolve_root(home)` |
 | `config::config_dir()` | `config_dir_from(xdg, home)` |
 | `auth::enforce(key)` | `decide(auth, token, key)` |
 
@@ -481,7 +481,7 @@ Test the pure function with fixed inputs. The I/O-dependent function is thin and
 vb && vt                            # build clean, tests green
 v setup status                      # gate reports "not configured"
 v deploy local --help               # config resolves
-vfresh setup init --root ~/vhp/project-vhp --no-pull --yes
+vfresh setup init --root ~/guss/project-guss --no-pull --yes
 ```
 
 The last one tests the first-run experience without touching your setup.

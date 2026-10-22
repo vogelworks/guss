@@ -4,9 +4,9 @@ use crate::git;
 use crate::hooks;
 use colored::Colorize;
 
-use vhp_common::{Result, error::anyhow};
+use guss_common::{Result, error::anyhow};
 
-/// vhp project release start <version>
+/// guss project release start <version>
 /// Creates a release branch off develop.
 pub fn start(config: &Config, version: &str) -> Result<()> {
     let branch = config.release_branch(version);
@@ -24,13 +24,13 @@ pub fn start(config: &Config, version: &str) -> Result<()> {
 
     println!("{} {}", "Created and switched to release branch:".green(), branch.cyan());
     println!("Bump version numbers, update changelogs, then run:");
-    println!("  vhp project release finish {}", version);
+    println!("  guss project release finish {}", version);
 
     hooks::run(config, "release.start", &branch)?;
     Ok(())
 }
 
-/// vhp project release finish <version>
+/// guss project release finish <version>
 /// Merges release into main and develop, tags main, deletes branch.
 pub fn finish(config: &Config, version: &str) -> Result<()> {
     let branch = config.release_branch(version);
@@ -58,10 +58,14 @@ pub fn finish(config: &Config, version: &str) -> Result<()> {
     // Delete the release branch
     git::run(&["branch", "-d", &branch])?;
 
-    println!("{} {} {} {} {} {}",
-        "Merged".green(), branch.cyan(),
-        "into".green(), config.branch.main.cyan(),
-        "and".green(), config.branch.develop.cyan()
+    println!(
+        "{} {} {} {} {} {}",
+        "Merged".green(),
+        branch.cyan(),
+        "into".green(),
+        config.branch.main.cyan(),
+        "and".green(),
+        config.branch.develop.cyan()
     );
     println!("{} {}", "Tagged release:".green(), tag.cyan());
 
@@ -69,7 +73,7 @@ pub fn finish(config: &Config, version: &str) -> Result<()> {
     Ok(())
 }
 
-/// vhp project release publish <version>
+/// guss project release publish <version>
 /// Pushes the release branch to remote and optionally opens a PR into main.
 pub fn publish(config: &Config, version: &str) -> Result<()> {
     let branch = config.release_branch(version);

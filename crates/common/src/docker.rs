@@ -1,18 +1,18 @@
 //! Docker helpers for local Docker operations (build, push, tag, prune, compose).
 //! Remote Docker operations via SSM are in the aws crate.
 
+use crate::config;
 use crate::error::{Result, anyhow};
 use crate::paths;
 use crate::proc;
-use crate::config;
 use std::path::Path;
 
-/// Docker Hub namespace used for VHP images: `cmv343/vhp-<service>:<tag>`.
+/// Docker Hub namespace used for guss images: `cmv343/guss-<service>:<tag>`.
 pub const REGISTRY_NS: &str = "cmv343";
 
-/// Fully-qualified image name for a service/tag, e.g. `cmv343/vhp-webserver:dev`.
+/// Fully-qualified image name for a service/tag, e.g. `cmv343/guss-webserver:dev`.
 pub fn image_name(service: &str, tag: &str) -> String {
-    format!("{REGISTRY_NS}/vhp-{service}:{tag}")
+    format!("{REGISTRY_NS}/guss-{service}:{tag}")
 }
 
 /// Build an image in `dir`, forwarding the ssh key from config (or default id_ed25519).
@@ -27,14 +27,7 @@ pub fn build_with_context(dir: &Path, image: &str, context: &str, dry_run: bool)
 
 /// Build an image with custom build context and build arguments.
 /// `args` should be key=value pairs like ["CONFIG_PATH=../config.json"]
-pub fn build_with_context_and_args(
-    dir: &Path,
-    image: &str,
-    context: &str,
-    args: &[&str],
-    dry_run: bool,
-    no_cache: bool,
-) -> Result<()> {
+pub fn build_with_context_and_args(dir: &Path, image: &str, context: &str, args: &[&str], dry_run: bool, no_cache: bool) -> Result<()> {
     build_with_dockerfile_and_args(dir, image, context, "Dockerfile", args, dry_run, no_cache)
 }
 
@@ -83,7 +76,7 @@ pub fn prune(dry_run: bool) -> Result<()> {
 
 /// `docker compose -f <file> -p <project> up -d` (local).
 pub fn compose_up(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     proc::run_in(
         &root,
         "sudo",
@@ -103,7 +96,7 @@ pub fn compose_up(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
 
 /// `docker compose -f <file> -p <project> down` (local).
 pub fn compose_down(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     proc::run_in(
         &root,
         "sudo",
@@ -122,7 +115,7 @@ pub fn compose_down(compose: &Path, project: &str, dry_run: bool) -> Result<()> 
 
 /// `docker compose -f <file> -p <project> stop` (local).
 pub fn compose_stop(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     proc::run_in(
         &root,
         "sudo",
@@ -141,7 +134,7 @@ pub fn compose_stop(compose: &Path, project: &str, dry_run: bool) -> Result<()> 
 
 /// `docker compose -f <file> -p <project> start` (local).
 pub fn compose_start(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     proc::run_in(
         &root,
         "sudo",
@@ -160,7 +153,7 @@ pub fn compose_start(compose: &Path, project: &str, dry_run: bool) -> Result<()>
 
 /// `docker compose -f <file> -p <project> ps` (local).
 pub fn compose_ps(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     proc::run_in(
         &root,
         "sudo",
@@ -179,7 +172,7 @@ pub fn compose_ps(compose: &Path, project: &str, dry_run: bool) -> Result<()> {
 
 /// `docker compose -f <file> -p <project> logs` with optional tail (local).
 pub fn compose_logs(compose: &Path, project: &str, tail: Option<usize>, dry_run: bool) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     let compose_str = compose.to_str().ok_or_else(|| anyhow!("invalid compose path"))?;
     let tail_str = tail.map(|n| n.to_string());
     let mut cmd = vec!["docker", "compose", "-f", compose_str, "-p", project, "logs"];
@@ -190,4 +183,3 @@ pub fn compose_logs(compose: &Path, project: &str, tail: Option<usize>, dry_run:
     cmd.push("-f");
     proc::run_in(&root, "sudo", &cmd, dry_run)
 }
-

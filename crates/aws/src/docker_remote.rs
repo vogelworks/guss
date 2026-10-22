@@ -1,9 +1,9 @@
 //! Remote Docker operations via AWS Systems Manager on net cluster instances.
 
-use vhp_common::error::Result;
-use vhp_common::config::Mode;
-use vhp_common::ui;
 use crate::ssm;
+use guss_common::config::Mode;
+use guss_common::error::Result;
+use guss_common::ui;
 
 /// Pull an image on a remote host via SSM: run `sudo docker pull <image>` on `{mode}-{service}`.
 pub fn pull(mode: Mode, service: &str, image: &str, yes: bool, dry_run: bool) -> Result<()> {
@@ -21,19 +21,10 @@ pub fn pull(mode: Mode, service: &str, image: &str, yes: bool, dry_run: bool) ->
 }
 
 /// Bring a service up remotely via SSM: run `sudo docker-compose ... up -d <service>`.
-pub fn compose_up(
-    mode: Mode,
-    service: &str,
-    cluster: &str,
-    compose_service: &str,
-    yes: bool,
-    dry_run: bool,
-) -> Result<()> {
+pub fn compose_up(mode: Mode, service: &str, cluster: &str, compose_service: &str, yes: bool, dry_run: bool) -> Result<()> {
     let project = format!("{cluster}-cluster");
     let compose = format!("/etc/docker/compose/{cluster}-cluster/docker-compose.yml");
-    let cmd = format!(
-        "sudo docker-compose -p {project} -f {compose} up -d {compose_service}"
-    );
+    let cmd = format!("sudo docker-compose -p {project} -f {compose} up -d {compose_service}");
     if mode == Mode::Prod {
         ui::require_confirm(&format!("{} on {}-{} ({})?", cmd, mode, service, "prod"), yes)?;
     }

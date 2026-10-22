@@ -9,7 +9,7 @@ name = "guss"
 path = "src/lib.rs"
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 clap.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true

@@ -5,7 +5,7 @@
 //! is fetched over plain HTTP today, which means a checksum alone proves nothing —
 //! an on-path attacker rewrites the manifest and the checksum together. Integrity
 //! therefore comes from an ed25519 signature, reusing the same crypto already
-//! vendored for device auth (`vhp_common::auth`).
+//! vendored for device auth (`guss_common::auth`).
 //!
 //! Both the tarball **and the manifest** are signed. Signing only the tarball
 //! would leave a rollback attack: replay an older, validly-signed release. The
@@ -25,9 +25,9 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
-use vhp_common::config::{ReleaseSettings, Settings};
-use vhp_common::error::{Context, Result, anyhow};
-use vhp_common::{auth, git, paths, proc, ui, version};
+use guss_common::config::{ReleaseSettings, Settings};
+use guss_common::error::{Context, Result, anyhow};
+use guss_common::{auth, git, paths, proc, ui, version};
 
 /// The only target published today. Static musl: the dependency tree is
 /// `ring` + `rustls` with no OpenSSL and no libpq, so one binary runs on any
@@ -66,18 +66,15 @@ pub struct Manifest {
 
 impl Manifest {
     fn tarball_name(version: &str) -> String {
-        format!("vhp-{version}-{TARGET}.tar.gz")
+        format!("guss-{version}-{TARGET}.tar.gz")
     }
 }
 
 fn require_settings() -> Result<ReleaseSettings> {
-    let config_path = vhp_common::config::config_file()?;
-    Settings::load()?.release.ok_or_else(|| {
-        anyhow!(
-            "no [release] section in {} — set base_url, ssh_host, remote_dir",
-            config_path.display()
-        )
-    })
+    let config_path = guss_common::config::config_file()?;
+    Settings::load()?
+        .release
+        .ok_or_else(|| anyhow!("no [release] section in {} — set base_url, ssh_host, remote_dir", config_path.display()))
 }
 
 /// The key releases are verified against.
@@ -87,23 +84,20 @@ fn require_settings() -> Result<ReleaseSettings> {
 /// fell into — or baking in a key that cannot then be rotated without a new
 /// release. `setup keygen` prints the block to paste here.
 fn verifying_key(settings: &ReleaseSettings) -> Result<VerifyingKey> {
-    let config_path = vhp_common::config::config_file()?;
+    let config_path = guss_common::config::config_file()?;
     let encoded = settings.public_key.as_deref().ok_or_else(|| {
         anyhow!(
-            "no [release] public_key in {} — run `vhp setup keygen` on the publishing \
+            "no [release] public_key in {} — run `guss setup keygen` on the publishing \
              machine and paste the key it prints",
             config_path.display()
         )
     })?;
-    let bytes = B64
-        .decode(encoded)
-        .context("[release] public_key is not valid base64")?;
+    let bytes = B64.decode(encoded).context("[release] public_key is not valid base64")?;
     let bytes: [u8; 32] = bytes
         .as_slice()
         .try_into()
         .map_err(|_| anyhow!("[release] public_key has the wrong length (want 32 bytes)"))?;
-    VerifyingKey::from_bytes(&bytes)
-        .map_err(|e| anyhow!("[release] public_key is not a valid ed25519 key: {e}"))
+    VerifyingKey::from_bytes(&bytes).map_err(|e| anyhow!("[release] public_key is not a valid ed25519 key: {e}"))
 }
 
 /// Sign `bytes`, returning a base64 detached signature.
@@ -117,14 +111,10 @@ fn verify(key: &VerifyingKey, bytes: &[u8], signature: &str, what: &str) -> Resu
     let sig = B64
         .decode(signature.trim())
         .with_context(|| format!("{what} signature is not valid base64"))?;
-    let sig: [u8; 64] = sig
-        .as_slice()
-        .try_into()
-        .map_err(|_| anyhow!("{what} signature has the wrong length"))?;
+    let sig: [u8; 64] = sig.as_slice().try_into().map_err(|_| anyhow!("{what} signature has the wrong length"))?;
     key.verify(bytes, &Signature::from_bytes(&sig))
         .map_err(|_| anyhow!("{what} failed signature verification — refusing to continue"))
 }
-
 
 /// sha256 of a file, via `sha256sum` — avoids pulling a hashing crate into the
 /// dependency tree for one call site.
@@ -165,8 +155,8 @@ pub fn keygen(force: bool, yes: bool) -> Result<()> {
         ui::good(&format!("  wrote a new key to {} (0600)", path.display()));
     }
     ui::section();
-    println!("Add this to ~/.config/vhp/config.toml on every machine that runs");
-    println!("`vhp setup update` (and to install.sh on the server):\n");
+    println!("Add this to ~/.config/guss/config.toml on every machine that runs");
+    println!("`guss setup update` (and to install.sh on the server):\n");
     println!("[release]");
     println!("public_key = \"{public}\"");
     ui::section();
@@ -180,16 +170,13 @@ pub fn publish(channel: Channel, yes: bool, dry_run: bool) -> Result<()> {
     let settings = require_settings()?;
     let key_path = paths::release_key_file()?;
     if !key_path.exists() {
-        return Err(anyhow!(
-            "no release key at {} — run `vhp setup keygen` first",
-            key_path.display()
-        ));
+        return Err(anyhow!("no release key at {} — run `guss setup keygen` first", key_path.display()));
     }
     let version = env!("CARGO_PKG_VERSION").to_string();
     let tools = paths::tools_dir()?;
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
 
-    ui::heading(&format!("publish vhp {version} -> {channel}"));
+    ui::heading(&format!("publish guss {version} -> {channel}"));
     println!(
         "  target  -> {TARGET}\n  host    -> {}\n  dir     -> {}/{channel}",
         settings.ssh_host, settings.remote_dir
@@ -198,30 +185,18 @@ pub fn publish(channel: Channel, yes: bool, dry_run: bool) -> Result<()> {
     // Guards that CI would otherwise have enforced. Without them the artifact
     // cannot be traced back to a commit.
     if !git::is_clean(&root) {
-        return Err(anyhow!(
-            "{} has uncommitted changes — commit or stash before publishing",
-            root.display()
-        ));
+        return Err(anyhow!("{} has uncommitted changes — commit or stash before publishing", root.display()));
     }
     check_tag(&root, &version)?;
 
     ui::require_confirm("Build, sign, and upload this release?", yes)?;
 
-    proc::run_in(
-        &tools,
-        "cargo",
-        &["build", "--release", "--locked", "--target", TARGET],
-        dry_run,
-    )?;
+    proc::run_in(&tools, "cargo", &["build", "--release", "--locked", "--target", TARGET], dry_run)?;
 
     let staging = tools.join("target/release-staging");
     let tarball_name = Manifest::tarball_name(&version);
     let tarball = staging.join(&tarball_name);
-    let binary = tools
-        .join("target")
-        .join(TARGET)
-        .join("release")
-        .join("vhp");
+    let binary = tools.join("target").join(TARGET).join("release").join("guss");
 
     println!("  package {}", tarball.display());
     if !dry_run {
@@ -231,12 +206,8 @@ pub fn publish(channel: Channel, yes: bool, dry_run: bool) -> Result<()> {
         }
         let binary_dir = binary.parent().unwrap().to_string_lossy().to_string();
         let tarball_s = tarball.to_string_lossy().to_string();
-        // -C so the archive holds a bare `vhp`, not the full target path.
-        proc::run(
-            "tar",
-            &["czf", &tarball_s, "-C", &binary_dir, "vhp"],
-            false,
-        )?;
+        // -C so the archive holds a bare `guss`, not the full target path.
+        proc::run("tar", &["czf", &tarball_s, "-C", &binary_dir, "guss"], false)?;
     }
 
     let (manifest_bytes, manifest_sig, tarball_sig) = if dry_run {
@@ -275,21 +246,13 @@ pub fn publish(channel: Channel, yes: bool, dry_run: bool) -> Result<()> {
     let remote = format!("{}:{}/{channel}/", settings.ssh_host, settings.remote_dir);
     let mkdir = format!("mkdir -p {}/{channel}", settings.remote_dir);
     proc::run("ssh", &[&settings.ssh_host, &mkdir], dry_run)?;
-    for path in [
-        &tarball,
-        &tarball_sig_path,
-        &manifest_path,
-        &manifest_sig_path,
-    ] {
+    for path in [&tarball, &tarball_sig_path, &manifest_path, &manifest_sig_path] {
         let path_s = path.to_string_lossy().to_string();
         proc::run("scp", &[&path_s, &remote], dry_run)?;
     }
 
     ui::good(&format!("published {version} to {channel}"));
-    ui::info(&format!(
-        "  clients fetch {}/{channel}/manifest.toml",
-        settings.base_url
-    ));
+    ui::info(&format!("  clients fetch {}/{channel}/manifest.toml", settings.base_url));
     Ok(())
 }
 
@@ -303,7 +266,7 @@ fn check_tag(root: &Path, version: &str) -> Result<()> {
     }
     Err(anyhow!(
         "HEAD is not tagged {wanted} (found: {}) — cut the release first, \
-         e.g. `vhp project release finish {version}`",
+         e.g. `guss project release finish {version}`",
         if tags.trim().is_empty() {
             "no tags".to_string()
         } else {
@@ -315,19 +278,13 @@ fn check_tag(root: &Path, version: &str) -> Result<()> {
 // --- update -----------------------------------------------------------------
 
 /// Fetch, verify, and install a release.
-pub fn update(
-    channel: Channel,
-    tag: Option<&str>,
-    prefix: &Path,
-    yes: bool,
-    dry_run: bool,
-) -> Result<()> {
+pub fn update(channel: Channel, tag: Option<&str>, prefix: &Path, yes: bool, dry_run: bool) -> Result<()> {
     let settings = require_settings()?;
     let key = verifying_key(&settings)?;
     let current = env!("CARGO_PKG_VERSION");
     let base = format!("{}/{channel}", settings.base_url.trim_end_matches('/'));
 
-    ui::heading(&format!("update vhp ({channel})"));
+    ui::heading(&format!("update guss ({channel})"));
     println!("  running -> {current}\n  source  -> {base}");
 
     if dry_run {
@@ -341,55 +298,37 @@ pub fn update(
     // 1. Manifest and its signature. Verify before parsing, and verify over the
     //    exact bytes received.
     let manifest_bytes = fetch(&client, &format!("{base}/manifest.toml"))?;
-    let manifest_sig = String::from_utf8_lossy(&fetch(
-        &client,
-        &format!("{base}/manifest.toml.sig"),
-    )?)
-    .to_string();
+    let manifest_sig = String::from_utf8_lossy(&fetch(&client, &format!("{base}/manifest.toml.sig"))?).to_string();
     verify(&key, &manifest_bytes, &manifest_sig, "manifest")?;
 
     let manifest: Manifest = std::str::from_utf8(&manifest_bytes)
         .map_err(|e| anyhow!("manifest is signed but not valid UTF-8: {e}"))
-        .and_then(|text| {
-            toml::from_str(text).map_err(|e| anyhow!("manifest is signed but unparseable: {e}"))
-        })?;
+        .and_then(|text| toml::from_str(text).map_err(|e| anyhow!("manifest is signed but unparseable: {e}")))?;
 
     if manifest.target != TARGET {
-        return Err(anyhow!(
-            "published release targets {}, this build expects {TARGET}",
-            manifest.target
-        ));
+        return Err(anyhow!("published release targets {}, this build expects {TARGET}", manifest.target));
     }
 
     // 2. Version policy. An explicit --tag is the only way to move sideways or
     //    backwards, so a rolled-back manifest cannot quietly downgrade anyone.
     match tag {
         Some(wanted) if wanted.trim_start_matches('v') != manifest.version => {
-            return Err(anyhow!(
-                "{channel} currently offers {}, not {wanted}",
-                manifest.version
-            ));
+            return Err(anyhow!("{channel} currently offers {}, not {wanted}", manifest.version));
         }
         Some(_) => {}
         None => {
             if !version::is_newer(&manifest.version, current) {
-                ui::good(&format!(
-                    "already up to date ({current}; {channel} offers {})",
-                    manifest.version
-                ));
+                ui::good(&format!("already up to date ({current}; {channel} offers {})", manifest.version));
                 return Ok(());
             }
         }
     }
 
     ui::info(&format!("  available -> {}", manifest.version));
-    ui::require_confirm(
-        &format!("Install {} over {current}?", manifest.version),
-        yes,
-    )?;
+    ui::require_confirm(&format!("Install {} over {current}?", manifest.version), yes)?;
 
     // 3. Tarball, checksum, signature — in that order, before anything is unpacked.
-    let staging = std::env::temp_dir().join(format!("vhp-update-{}", manifest.version));
+    let staging = std::env::temp_dir().join(format!("guss-update-{}", manifest.version));
     let _ = fs::remove_dir_all(&staging);
     fs::create_dir_all(&staging)?;
     let tarball = staging.join(&manifest.file);
@@ -399,15 +338,10 @@ pub fn update(
 
     let actual = sha256_file(&tarball)?;
     if actual != manifest.sha256.to_lowercase() {
-        return Err(anyhow!(
-            "sha256 mismatch: manifest says {}, download is {actual}",
-            manifest.sha256
-        ));
+        return Err(anyhow!("sha256 mismatch: manifest says {}, download is {actual}", manifest.sha256));
     }
 
-    let tarball_sig =
-        String::from_utf8_lossy(&fetch(&client, &format!("{base}/{}.sig", manifest.file))?)
-            .to_string();
+    let tarball_sig = String::from_utf8_lossy(&fetch(&client, &format!("{base}/{}.sig", manifest.file))?).to_string();
     verify(&key, &tarball_bytes, &tarball_sig, "tarball")?;
     ui::good("  verified checksum and signature");
 
@@ -416,7 +350,7 @@ pub fn update(
     let staging_s = staging.to_string_lossy().to_string();
     proc::run("tar", &["xzf", &tarball_s, "-C", &staging_s], false)?;
 
-    crate::install_binary(&staging.join("vhp"), &prefix.join("vhp"), false)?;
+    crate::install_binary(&staging.join("guss"), &prefix.join("guss"), false)?;
     let _ = fs::remove_dir_all(&staging);
 
     ui::good(&format!("updated to {}", manifest.version));
@@ -431,10 +365,7 @@ fn fetch(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<u8>> {
         .with_context(|| format!("could not reach {url}"))?
         .error_for_status()
         .with_context(|| format!("{url} returned an error status"))?;
-    Ok(resp
-        .bytes()
-        .with_context(|| format!("could not read the body of {url}"))?
-        .to_vec())
+    Ok(resp.bytes().with_context(|| format!("could not read the body of {url}"))?.to_vec())
 }
 
 #[cfg(test)]
@@ -469,9 +400,7 @@ mod tests {
     fn verify_rejects_tampered_bytes() {
         let (signing, verifying) = keypair();
         let sig = sign(&signing, b"original");
-        let err = verify(&verifying, b"modified", &sig, "tarball")
-            .unwrap_err()
-            .to_string();
+        let err = verify(&verifying, b"modified", &sig, "tarball").unwrap_err().to_string();
         assert!(err.contains("tarball"), "got: {err}");
         assert!(err.contains("signature verification"), "got: {err}");
     }
@@ -552,7 +481,7 @@ mod tests {
     #[test]
     fn tarball_name_includes_version_and_target() {
         let name = Manifest::tarball_name("0.2.0");
-        assert_eq!(name, format!("vhp-0.2.0-{TARGET}.tar.gz"));
+        assert_eq!(name, format!("guss-0.2.0-{TARGET}.tar.gz"));
     }
 
     #[test]

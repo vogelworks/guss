@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::git;
 use colored::Colorize;
 
-use vhp_common::{Result, error::anyhow};
+use guss_common::{Result, error::anyhow};
 
 pub fn run() -> Result<()> {
     if !git::is_repo() {

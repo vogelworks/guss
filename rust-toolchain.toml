@@ -1,5 +1,5 @@
-# Pinned so every machine that builds or publishes `vhp` uses the same compiler.
-# There is no CI: `vhp setup publish` runs on a person's laptop, so this file is
+# Pinned so every machine that builds or publishes `guss` uses the same compiler.
+# There is no CI: `guss setup publish` runs on a person's laptop, so this file is
 # the only thing keeping release builds reproducible.
 #
 # The musl target is what `setup publish` produces — a static binary, so one

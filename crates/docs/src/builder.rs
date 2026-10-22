@@ -1,20 +1,23 @@
 //! Config-driven documentation generation for API projects.
 
+use guss_common::config::{DocBuild, DocConfig, Settings};
+use guss_common::error::{Result, anyhow};
+use guss_common::paths;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use vhp_common::config::{DocConfig, DocBuild, Settings};
-use vhp_common::error::{Result, anyhow};
-use vhp_common::paths;
 
 pub fn build(cfg: &DocConfig, date: &str) -> Result<PathBuf> {
     let settings = Settings::load()?;
-    let config_root = settings.root.clone().unwrap_or(paths::project_vhp()?);
+    let config_root = settings.root.clone().unwrap_or(paths::project_guss()?);
 
     let builds = cfg.builds.as_ref().ok_or_else(|| anyhow!("no builds configured"))?;
 
     // Resolve output folder (where docs go)
-    let output_root = cfg.root.as_ref().ok_or_else(|| anyhow!("doc config '{}' must have root folder defined", cfg.name))?;
+    let output_root = cfg
+        .root
+        .as_ref()
+        .ok_or_else(|| anyhow!("doc config '{}' must have root folder defined", cfg.name))?;
     let output_base = if output_root.is_absolute() {
         output_root.clone()
     } else {
@@ -23,7 +26,9 @@ pub fn build(cfg: &DocConfig, date: &str) -> Result<PathBuf> {
 
     for build in builds {
         // Resolve build root (where source files are)
-        let build_root = build.root.as_ref()
+        let build_root = build
+            .root
+            .as_ref()
             .ok_or_else(|| anyhow!("build type '{}' must have root folder defined", build.r#type))?;
 
         let source_root = if build_root.is_absolute() {
@@ -52,7 +57,9 @@ pub fn build(cfg: &DocConfig, date: &str) -> Result<PathBuf> {
                 }
 
                 // Determine output path for this build
-                let out_filename = build.output.as_ref()
+                let out_filename = build
+                    .output
+                    .as_ref()
                     .map(|p| p.clone())
                     .unwrap_or_else(|| format!("{}.md", build.r#type).into());
                 let out_path = output_base.join(&out_filename);

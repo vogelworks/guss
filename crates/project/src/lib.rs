@@ -1,6 +1,6 @@
 //! `project` task: git-flow branch controller (feature/release), wired
-//! in as `vhp project ...`. Operates on the repo in the current directory —
-//! unrelated to which VHP repo you're standing in, unlike the other tasks.
+//! in as `guss project ...`. Operates on the repo in the current directory —
+//! unrelated to which guss repo you're standing in, unlike the other tasks.
 
 mod commands;
 mod config;
@@ -13,7 +13,7 @@ mod test_helpers;
 use clap::{Args, Subcommand};
 use config::Config;
 
-use vhp_common::Result;
+use guss_common::Result;
 
 #[derive(Args)]
 pub struct ProjectArgs {

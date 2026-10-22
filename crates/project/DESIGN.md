@@ -1,6 +1,6 @@
 # project — design reference
 
-A git-flow controller, wired in as `vhp project ...` (formerly the standalone
+A git-flow controller, wired in as `guss project ...` (formerly the standalone
 `gust` binary).
 
 ---
@@ -39,10 +39,10 @@ enabled = true        # auto-open PR via `gh` after publish
 [[hooks]]
 event  = "release.publish"   # dot-namespaced action name, see Hooks below
 branch = "release/*"         # optional glob; omit to match every branch
-run    = "vhp deploy portal webserver dev --yes"
+run    = "guss deploy portal webserver dev --yes"
 ```
 
-`Config::load()` errors if `.gitflow` is missing. `vhp project init` writes defaults.
+`Config::load()` errors if `.gitflow` is missing. `guss project init` writes defaults.
 
 ---
 
@@ -57,7 +57,7 @@ src/
   hooks.rs             match + run configured [[hooks]] after an action
   commands/
     mod.rs
-    init.rs            vhp project init
+    init.rs            guss project init
     feature.rs         start / finish / publish / list
     release.rs         start / finish / publish
 ```
@@ -88,7 +88,7 @@ feature/release branches.
 ## Hooks
 
 `[[hooks]]` entries in `.gitflow` run a shell command after a lifecycle
-action completes successfully. They only fire through `vhp project`
+action completes successfully. They only fire through `guss project`
 commands — there's no real git hook installed, so a bare `git push`/`git
 pull` in the repo bypasses them entirely. This is deliberately per-repo:
 which hooks exist depends entirely on which repo's `.gitflow` you're
@@ -104,7 +104,7 @@ standing in.
 - `run` — a shell command string, executed via `sh -c`.
 
 Multiple hooks can match the same event; they run in config order. A hook
-that exits non-zero stops the chain and the whole `vhp project` command
+that exits non-zero stops the chain and the whole `guss project` command
 returns that error — but only after the git action itself already
 succeeded, since the hook is a post-action step, not a gate on it.
 
@@ -116,8 +116,8 @@ yet).
 
 ## Permissions
 
-`vhp project` commands run behind the CLI's login/permission gate (see the
-"Login & permissions" section of `docs/Setup/vhp-cli-setup.md`) — enforced in
+`guss project` commands run behind the CLI's login/permission gate (see the
+"Login & permissions" section of `docs/Setup/guss-cli-setup.md`) — enforced in
 `cli/src/main.rs` via `ProjectArgs::permission_key()`, not inside this crate.
 Most commands are gated under the flat `"project"` key; `release` is
 qualified separately (`"project:release"`) since it touches shared
@@ -125,7 +125,7 @@ branches/tags.
 
 > **Known issue:** `release start`/`finish` take
 > a positional `version` argument that currently collides with clap's
-> auto-generated `--version`/`-V` flag once this crate runs under the `vhp`
+> auto-generated `--version`/`-V` flag once this crate runs under the `guss`
 > umbrella binary (`propagate_version` on the top-level `Cli`) — both panic
 > at parse time. Not yet fixed; unrelated to the permission gate itself.
 
@@ -133,7 +133,7 @@ branches/tags.
 
 ## Error handling
 
-Uses `vhp_common::Result` (an `anyhow`-backed alias shared by every task crate).
+Uses `guss_common::Result` (an `anyhow`-backed alias shared by every task crate).
 
 All commands propagate errors up to `run()`, which `cli`'s `main` prints to
 stderr and exits 1 on. No `unwrap` in command logic. `gh` unavailability is a
@@ -145,7 +145,7 @@ warning, not an error.
 
 | Crate       | Use                                    |
 |-------------|-----------------------------------------|
-| vhp-common  | shared Result/error type, proc/git/gh helpers |
+| guss-common  | shared Result/error type, proc/git/gh helpers |
 | clap        | CLI arg parsing + --help                |
 | serde       | derive Serialize/Deserialize            |
 | toml        | .gitflow read/write                     |

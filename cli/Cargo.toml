@@ -4,13 +4,13 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
-# The umbrella command is `vhp`.
+# The umbrella command is `guss`.
 [[bin]]
-name = "vhp"
+name = "guss"
 path = "src/main.rs"
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 clap.workspace = true
 
 # Every task lib.

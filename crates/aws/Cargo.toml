@@ -5,5 +5,5 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 serde_json.workspace = true

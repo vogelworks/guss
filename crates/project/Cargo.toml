@@ -9,7 +9,7 @@ name = "project"
 path = "src/lib.rs"
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 clap.workspace = true
 serde.workspace = true
 toml.workspace = true

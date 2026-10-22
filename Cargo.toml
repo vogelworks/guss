@@ -16,11 +16,11 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["VHP"]
+authors = ["guss"]
 
 [workspace.dependencies]
 # Shared internal crates
-vhp-common = { path = "crates/common" }
+guss-common = { path = "crates/common" }
 docs = { path = "crates/docs" }
 aws = { path = "crates/aws" }
 

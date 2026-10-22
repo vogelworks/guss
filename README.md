@@ -1,13 +1,13 @@
-# VHP Admin Tools (`vhp`)
+# guss Admin Tools (`guss`)
 
-One Rust CLI, **`vhp`**, for building, deploying, cluster access, docs search, and
-git-flow branching. Run `vhp` with no arguments for the interactive shell (guss).
+One Rust CLI, **`guss`**, for building, deploying, cluster access, docs search, and
+git-flow branching. Run `guss` with no arguments for the interactive shell (guss).
 
-User documentation lives in the project-vhp `docs/` folder (and is searchable with
-`vhp docs <term>`):
+User documentation lives in the project-guss `docs/` folder (and is searchable with
+`guss docs <term>`):
 
-- **Install & configure:** [docs/Setup/vhp-cli-setup.md](../docs/Setup/vhp-cli-setup.md)
-- **Usage & command reference:** [docs/Help/vhp-cli.md](../docs/Help/vhp-cli.md)
+- **Install & configure:** [docs/Setup/guss-cli-setup.md](../docs/Setup/guss-cli-setup.md)
+- **Usage & command reference:** [docs/Help/guss-cli.md](../docs/Help/guss-cli.md)
 
 Working on the tool itself:
 
@@ -15,4 +15,4 @@ Working on the tool itself:
 - [DEVELOPING.md](DEVELOPING.md) — workflow, testing, house conventions
 - [TECHNICAL.md](TECHNICAL.md) — architecture and internals
 - [DISTRIBUTION_TODO.md](DISTRIBUTION_TODO.md) — release/distribution roadmap
-- [crates/project/DESIGN.md](crates/project/DESIGN.md) — `vhp project` design
+- [crates/project/DESIGN.md](crates/project/DESIGN.md) — `guss project` design

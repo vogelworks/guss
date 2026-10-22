@@ -2,12 +2,12 @@
 //!
 //! Config used to live at `<repo>/-config/`, which made the config location a
 //! function of the code location — that is why every path in the tool broke on a
-//! machine whose checkout was not at `~/project-vhp`. It now lives at
-//! `${XDG_CONFIG_HOME:-~/.config}/vhp/`, and the *repo* path is recorded in it
+//! machine whose checkout was not at `~/project-guss`. It now lives at
+//! `${XDG_CONFIG_HOME:-~/.config}/guss/`, and the *repo* path is recorded in it
 //! rather than the other way round.
 //!
 //! Everything here depends only on [`paths::home`]. It must never reach for
-//! [`paths::project_vhp`], which reads these settings — that would recurse.
+//! [`paths::project_guss`], which reads these settings — that would recurse.
 
 use crate::error::{Result, anyhow};
 use crate::paths;
@@ -22,20 +22,17 @@ pub const DEFAULT_KEY: &str = "devteam";
 /// Filename of the settings document inside [`config_dir`].
 pub const CONFIG_FILE: &str = "config.toml";
 
-/// `${XDG_CONFIG_HOME:-~/.config}/vhp` — where all tool state lives.
+/// `${XDG_CONFIG_HOME:-~/.config}/guss` — where all tool state lives.
 pub fn config_dir() -> Result<PathBuf> {
-    Ok(config_dir_from(
-        std::env::var_os("XDG_CONFIG_HOME").as_deref(),
-        &paths::home()?,
-    ))
+    Ok(config_dir_from(std::env::var_os("XDG_CONFIG_HOME").as_deref(), &paths::home()?))
 }
 
 /// Split out so the XDG rule is testable without mutating the environment
 /// (`set_var` is `unsafe` in edition 2024 and would race sibling tests).
 fn config_dir_from(xdg: Option<&OsStr>, home: &Path) -> PathBuf {
     match xdg.filter(|v| !v.is_empty()) {
-        Some(base) => Path::new(base).join("vhp"),
-        None => home.join(".config").join("vhp"),
+        Some(base) => Path::new(base).join("guss"),
+        None => home.join(".config").join("guss"),
     }
 }
 
@@ -49,7 +46,7 @@ pub fn config_file() -> Result<PathBuf> {
 /// why the tool could not be pointed at a different server without a re-release.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthSettings {
-    /// Base URL of the login server, e.g. `http://dev.vhpportal.office`.
+    /// Base URL of the login server, e.g. `http://dev.gussportal.office`.
     pub login_host: String,
     /// The login server's ed25519 public key, base64. Tokens are verified
     /// against this.
@@ -60,9 +57,9 @@ pub struct AuthSettings {
 /// `setup update` / `setup publish` are unavailable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseSettings {
-    /// HTTP base for downloads, e.g. `http://dev.vhpportal.office/tools`.
+    /// HTTP base for downloads, e.g. `http://dev.gussportal.office/tools`.
     pub base_url: String,
-    /// ssh destination `publish` uploads to, e.g. `devteam@dev.vhpportal.office`.
+    /// ssh destination `publish` uploads to, e.g. `devteam@dev.gussportal.office`.
     pub ssh_host: String,
     /// Directory on that host holding the per-channel subdirectories.
     pub remote_dir: String,
@@ -122,8 +119,6 @@ impl Mode {
     }
 }
 
-
-
 /// Build configuration: apps to build, source, and destination.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildConfig {
@@ -145,13 +140,8 @@ fn default_sync_version() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum BuildDeploy {
-    Web {
-        cluster: String,
-        container: String,
-    },
-    Desktop {
-        command: String,
-    },
+    Web { cluster: String, container: String },
+    Desktop { command: String },
 }
 
 /// Single app in a build configuration.
@@ -260,10 +250,10 @@ fn default_fallback() -> String {
 }
 
 /// The whole settings document. Every field optional: a machine with no config
-/// file still works, falling back to the path probe in [`paths::project_vhp`].
+/// file still works, falling back to the path probe in [`paths::project_guss`].
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
-    /// The `project-vhp` checkout this machine uses.
+    /// The `project-guss` checkout this machine uses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root: Option<PathBuf>,
     /// The vapi services tree, if it is not `~/project-vapi`.
@@ -294,7 +284,6 @@ pub struct Settings {
     pub doc_configs: Vec<String>,
 }
 
-
 impl Settings {
     /// Load the settings, treating a missing file as all-defaults. Deliberately
     /// uncached: `setup init` writes the file and then keeps running, so a
@@ -322,11 +311,8 @@ impl Settings {
 
     /// Get the current deployment mode, returning an error if not configured.
     pub fn get_mode(&self) -> Result<Mode> {
-        self.mode.ok_or_else(|| {
-            anyhow!(
-                "mode not configured. Run 'vhp net init' to set it up or 'vhp net mode <dev|prod|test>' to change it."
-            )
-        })
+        self.mode
+            .ok_or_else(|| anyhow!("mode not configured. Run 'guss net init' to set it up or 'guss net mode <dev|prod|test>' to change it."))
     }
 
     /// Set the deployment mode and save to disk.
@@ -343,7 +329,7 @@ impl Settings {
     /// Get default path to an app repo (applications, webserver).
     /// Used for mode branch switching; the actual paths come from app_configs.
     pub fn get_app_repo_path(&self, name: &str) -> Result<PathBuf> {
-        let root = self.root.clone().unwrap_or(crate::paths::project_vhp()?);
+        let root = self.root.clone().unwrap_or(crate::paths::project_guss()?);
         match name {
             "applications" | "webserver" => Ok(root.join(name)),
             _ => Err(anyhow!("unknown app repo: {name}")),
@@ -353,7 +339,7 @@ impl Settings {
     /// Load an app config by name from configured app_configs paths.
     pub fn get_app_config(&self, name: &str) -> Result<BuildConfig> {
         for config_path in &self.app_configs {
-            let root = self.root.clone().unwrap_or(crate::paths::project_vhp()?);
+            let root = self.root.clone().unwrap_or(crate::paths::project_guss()?);
             let path = if Path::new(config_path).is_absolute() {
                 PathBuf::from(config_path)
             } else {
@@ -363,9 +349,7 @@ impl Settings {
                 continue;
             }
             let text = fs::read_to_string(&path)?;
-            let config: BuildConfig =
-                serde_json::from_str(&text)
-                    .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+            let config: BuildConfig = serde_json::from_str(&text).map_err(|e| anyhow!("{}: {e}", path.display()))?;
             if config.name == name {
                 return Ok(config);
             }
@@ -376,7 +360,7 @@ impl Settings {
     /// Load a doc config by name from configured doc_configs paths.
     pub fn get_doc_config(&self, name: &str) -> Result<DocConfig> {
         for config_path in &self.doc_configs {
-            let root = self.root.clone().unwrap_or(crate::paths::project_vhp()?);
+            let root = self.root.clone().unwrap_or(crate::paths::project_guss()?);
             let path = if Path::new(config_path).is_absolute() {
                 PathBuf::from(config_path)
             } else {
@@ -386,9 +370,7 @@ impl Settings {
                 continue;
             }
             let text = fs::read_to_string(&path)?;
-            let config: DocConfig =
-                serde_json::from_str(&text)
-                    .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+            let config: DocConfig = serde_json::from_str(&text).map_err(|e| anyhow!("{}: {e}", path.display()))?;
             if config.name == name {
                 return Ok(config);
             }
@@ -401,7 +383,7 @@ impl Settings {
         let mut configs = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for config_path in &self.doc_configs {
-            let root = self.root.clone().unwrap_or(crate::paths::project_vhp()?);
+            let root = self.root.clone().unwrap_or(crate::paths::project_guss()?);
             let path = if Path::new(config_path).is_absolute() {
                 PathBuf::from(config_path)
             } else {
@@ -411,9 +393,7 @@ impl Settings {
                 continue;
             }
             let text = fs::read_to_string(&path)?;
-            let config: DocConfig =
-                serde_json::from_str(&text)
-                    .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+            let config: DocConfig = serde_json::from_str(&text).map_err(|e| anyhow!("{}: {e}", path.display()))?;
             if seen.insert(config.name.clone()) {
                 configs.push(config);
             }
@@ -427,11 +407,7 @@ pub fn mykey() -> Result<String> {
     let path = paths::mykey_file()?;
     let value = fs::read_to_string(&path).unwrap_or_default();
     let value = value.trim();
-    Ok(if value.is_empty() {
-        DEFAULT_KEY.to_string()
-    } else {
-        value.to_string()
-    })
+    Ok(if value.is_empty() { DEFAULT_KEY.to_string() } else { value.to_string() })
 }
 
 #[cfg(test)]
@@ -440,38 +416,32 @@ mod tests {
 
     fn temp_dir(label: &str) -> PathBuf {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        let dir = std::env::temp_dir().join(format!("vhp_settings_{label}_{nanos}"));
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
+        let dir = std::env::temp_dir().join(format!("guss_settings_{label}_{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
 
     #[test]
     fn config_dir_defaults_under_home() {
-        assert_eq!(
-            config_dir_from(None, Path::new("/home/alice")),
-            PathBuf::from("/home/alice/.config/vhp")
-        );
+        assert_eq!(config_dir_from(None, Path::new("/home/alice")), PathBuf::from("/home/alice/.config/guss"));
     }
 
     #[test]
     fn config_dir_honors_xdg() {
         assert_eq!(
             config_dir_from(Some(OsStr::new("/custom/cfg")), Path::new("/home/alice")),
-            PathBuf::from("/custom/cfg/vhp")
+            PathBuf::from("/custom/cfg/guss")
         );
     }
 
     #[test]
     fn empty_xdg_falls_back_to_home() {
         // An exported-but-empty XDG_CONFIG_HOME is common and must not produce
-        // a config path rooted at "/vhp".
+        // a config path rooted at "/guss".
         assert_eq!(
             config_dir_from(Some(OsStr::new("")), Path::new("/home/alice")),
-            PathBuf::from("/home/alice/.config/vhp")
+            PathBuf::from("/home/alice/.config/guss")
         );
     }
 
@@ -494,32 +464,26 @@ mod tests {
         fs::write(
             &path,
             r#"
-root = "/home/alice/work/project-vhp"
-vapi_root = "/home/alice/work/project-vhp/servers"
+root = "/home/alice/work/project-guss"
+vapi_root = "/home/alice/work/project-guss/servers"
 mode = "dev"
-tracked_repos = ["~/project-vhp/servers", "~/project-vhp/network"]
+tracked_repos = ["~/project-guss/servers", "~/project-guss/network"]
 
 [auth]
-login_host = "http://dev.vhpportal.office"
+login_host = "http://dev.gussportal.office"
 server_key = "AAAA"
 
 [release]
-base_url = "http://dev.vhpportal.office/tools"
-ssh_host = "devteam@dev.vhpportal.office"
+base_url = "http://dev.gussportal.office/tools"
+ssh_host = "devteam@dev.gussportal.office"
 remote_dir = "/srv/tools"
 "#,
         )
         .unwrap();
 
         let settings = Settings::load_from(&path).unwrap();
-        assert_eq!(
-            settings.root,
-            Some(PathBuf::from("/home/alice/work/project-vhp"))
-        );
-        assert_eq!(
-            settings.vapi_root,
-            Some(PathBuf::from("/home/alice/work/project-vhp/servers"))
-        );
+        assert_eq!(settings.root, Some(PathBuf::from("/home/alice/work/project-guss")));
+        assert_eq!(settings.vapi_root, Some(PathBuf::from("/home/alice/work/project-guss/servers")));
         assert_eq!(settings.mode, Some(Mode::Dev));
         assert_eq!(settings.tracked_repos.len(), 2);
         assert_eq!(settings.auth.as_ref().unwrap().server_key, "AAAA");
@@ -541,10 +505,7 @@ remote_dir = "/srv/tools"
     fn auth_section_alone_is_enough() {
         // The gate keys off this section's presence, so it must parse with no
         // root/release alongside it.
-        let settings: Settings = toml::from_str(
-            "[auth]\nlogin_host = \"http://h\"\nserver_key = \"k\"\n",
-        )
-        .unwrap();
+        let settings: Settings = toml::from_str("[auth]\nlogin_host = \"http://h\"\nserver_key = \"k\"\n").unwrap();
         assert!(settings.auth.is_some());
         assert!(settings.root.is_none());
     }

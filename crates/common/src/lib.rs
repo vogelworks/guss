@@ -1,4 +1,4 @@
-//! Shared building blocks for the VHP admin tools workspace.
+//! Shared building blocks for the guss admin tools workspace.
 //!
 //! Every task crate (build, deploy, vapi, net, docs, jump, setup, project)
 //! depends on this crate so subprocess handling, prompting, paths, config,

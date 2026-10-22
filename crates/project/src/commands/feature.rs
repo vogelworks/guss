@@ -4,9 +4,9 @@ use crate::git;
 use crate::hooks;
 use colored::Colorize;
 
-use vhp_common::{Result, error::anyhow};
+use guss_common::{Result, error::anyhow};
 
-/// vhp project feature start <name>
+/// guss project feature start <name>
 /// Creates a new feature branch off develop.
 pub fn start(config: &Config, name: &str) -> Result<()> {
     let branch = config.feature_branch(name);
@@ -24,13 +24,13 @@ pub fn start(config: &Config, name: &str) -> Result<()> {
 
     println!("{} {}", "Created and switched to feature branch:".green(), branch.cyan());
     println!("Now make your changes, then run:");
-    println!("  vhp project feature finish {}", name);
+    println!("  guss project feature finish {}", name);
 
     hooks::run(config, "feature.start", &branch)?;
     Ok(())
 }
 
-/// vhp project feature finish <name>
+/// guss project feature finish <name>
 /// Merges the feature branch back into develop and deletes it.
 pub fn finish(config: &Config, name: &str) -> Result<()> {
     let branch = config.feature_branch(name);
@@ -48,13 +48,19 @@ pub fn finish(config: &Config, name: &str) -> Result<()> {
     git::run(&["merge", "--no-ff", &branch, "-m", &format!("Merge branch '{}'", branch)])?;
     git::run(&["branch", "-d", &branch])?;
 
-    println!("{} {} {} {}", "Merged".green(), branch.cyan(), "into".green(), config.branch.develop.cyan());
+    println!(
+        "{} {} {} {}",
+        "Merged".green(),
+        branch.cyan(),
+        "into".green(),
+        config.branch.develop.cyan()
+    );
 
     hooks::run(config, "feature.finish", &branch)?;
     Ok(())
 }
 
-/// vhp project feature publish <name>
+/// guss project feature publish <name>
 /// Pushes the feature branch to remote and optionally opens a PR into develop.
 pub fn publish(config: &Config, name: &str) -> Result<()> {
     let branch = config.feature_branch(name);
@@ -79,7 +85,7 @@ pub fn publish(config: &Config, name: &str) -> Result<()> {
     Ok(())
 }
 
-/// vhp project feature list
+/// guss project feature list
 /// Lists all local feature branches.
 pub fn list(config: &Config) {
     let pattern = format!("{}*", config.prefix.feature);

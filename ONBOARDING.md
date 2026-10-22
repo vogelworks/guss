@@ -1,6 +1,6 @@
-# Onboarding: vhp CLI Development
+# Onboarding: guss CLI Development
 
-Getting the `vhp` CLI tool running on a new machine.
+Getting the `guss` CLI tool running on a new machine.
 
 ## Prerequisites
 
@@ -15,8 +15,8 @@ Getting the `vhp` CLI tool running on a new machine.
 ### 1. Clone the repo with submodules
 
 ```bash
-git clone --recurse-submodules git@github.com:VHP1946/project-vhp.git
-cd project-vhp/guss
+git clone --recurse-submodules git@github.com:guss1946/project-guss.git
+cd project-guss/guss
 ```
 
 If you cloned without `--recurse-submodules`, run:
@@ -37,27 +37,27 @@ All tests should pass. If you see dependency issues, run `cargo update` to refre
 
 Most workflows need a deployment mode. Run:
 ```bash
-vhp net init
+guss net init
 # or to set manually:
-vhp net mode dev    # or prod / test
+guss net mode dev    # or prod / test
 ```
 
-This writes `~/.config/vhp/config.toml` with the mode and other settings.
+This writes `~/.config/guss/config.toml` with the mode and other settings.
 
-**Config file reference** (`~/.config/vhp/config.toml`):
+**Config file reference** (`~/.config/guss/config.toml`):
 ```toml
-root = "/path/to/project-vhp"      # repo location (auto-detected if absent)
+root = "/path/to/project-guss"      # repo location (auto-detected if absent)
 mode = "dev"                        # deployment mode: dev, prod, or test
 vapi_root = "/path/to/project-vapi" # vapi services location (optional)
 ssh_key = "id_ed25519"              # SSH key for docker builds (defaults to id_ed25519)
 
 [auth]                              # only needed if using permissioned commands
-login_host = "http://dev.vhpportal.office"
+login_host = "http://dev.gussportal.office"
 server_key = "<base64-key>"
 
 [release]                           # only needed for setup publish/update
-base_url = "http://dev.vhpportal.office/tools"
-ssh_host = "devteam@dev.vhpportal.office"
+base_url = "http://dev.gussportal.office/tools"
+ssh_host = "devteam@dev.gussportal.office"
 remote_dir = "/remote/path"
 ```
 
@@ -66,7 +66,7 @@ Most fields are optional. The permission gate is off until `[auth]` is set.
 ### 4. Set up shell aliases (optional but recommended)
 
 ```bash
-# Add vhp-dev shortcuts to ~/.bashrc or ~/.zshrc:
+# Add guss-dev shortcuts to ~/.bashrc or ~/.zshrc:
 # v <args>         → build and run (always current)
 # vv <args>        → run prebuilt binary (instant, stale until rebuild)
 # vb               → cargo build --workspace
@@ -75,7 +75,7 @@ Most fields are optional. The permission gate is off until `[auth]` is set.
 
 See [DEVELOPING.md](DEVELOPING.md) for the full setup block to copy.
 
-## Working on vhp
+## Working on guss
 
 ### Building and testing
 
@@ -89,7 +89,7 @@ cargo test -p <crate> --lib         # test one crate (e.g., -p deploy)
 
 From any directory:
 ```bash
-cargo run --manifest-path=~/path/to/project-vhp/guss/Cargo.toml -- <command>
+cargo run --manifest-path=~/path/to/project-guss/guss/Cargo.toml -- <command>
 # Or with the v alias:
 v <command>
 ```
@@ -112,7 +112,7 @@ See [TECHNICAL.md](TECHNICAL.md) and [DEVELOPING.md](DEVELOPING.md) for architec
 
 ## What's Next
 
-- Read [docs/Help/vhp-cli.md](../docs/Help/vhp-cli.md) for CLI usage
+- Read [docs/Help/guss-cli.md](../docs/Help/guss-cli.md) for CLI usage
 - Read [DEVELOPING.md](DEVELOPING.md) for deeper context, testing patterns, and house conventions
 - Check out the parent project's top-level docs for deployment, infrastructure, and application setup
 

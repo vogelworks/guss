@@ -1,12 +1,12 @@
 //! AWS service integrations: SSM, ECR, ECS, and remote Docker operations.
 
-pub mod ssm;
 pub mod docker_remote;
+pub mod ssm;
 
+use guss_common::error::{Result, anyhow};
+use guss_common::proc;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use vhp_common::error::{Result, anyhow};
-use vhp_common::proc;
 
 /// Get AWS account ID (aws sts get-caller-identity --query Account --output text).
 pub fn account_id() -> Result<String> {
@@ -41,11 +41,19 @@ pub fn ecr_login(registry: &str, region: &str, dry_run: bool) -> Result<()> {
 
 /// Force new ECS deployment (aws ecs update-service --cluster ... --service ... --force-new-deployment).
 pub fn ecs_force_deploy(cluster: &str, service: &str, region: &str, dry_run: bool) -> Result<()> {
-    proc::run("aws", &[
-        "ecs", "update-service",
-        "--cluster", cluster,
-        "--service", service,
-        "--force-new-deployment",
-        "--region", region,
-    ], dry_run)
+    proc::run(
+        "aws",
+        &[
+            "ecs",
+            "update-service",
+            "--cluster",
+            cluster,
+            "--service",
+            service,
+            "--force-new-deployment",
+            "--region",
+            region,
+        ],
+        dry_run,
+    )
 }

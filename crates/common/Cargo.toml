@@ -1,5 +1,5 @@
 [package]
-name = "vhp-common"
+name = "guss-common"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

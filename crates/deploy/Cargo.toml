@@ -9,7 +9,7 @@ name = "deploy"
 path = "src/lib.rs"
 
 [dependencies]
-vhp-common.workspace = true
+guss-common.workspace = true
 aws.workspace = true
 clap.workspace = true
 serde_json.workspace = true

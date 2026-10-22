@@ -1,4 +1,4 @@
-//! `guss` task: interactive shell for vhp commands.
+//! `guss` task: interactive shell for guss commands.
 //!
 //! Provides a nested REPL with TUI where you can navigate through commands and execute them.
 //! Outputs scroll in the main area; input is fixed at the bottom.
@@ -7,19 +7,19 @@ use clap::Args;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use guss_common::Result;
+use guss_common::history::History;
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     text::Line,
     widgets::{Block, Borders, Paragraph, Wrap},
-    Terminal,
 };
 use std::io;
 use std::process::Command;
-use vhp_common::Result;
-use vhp_common::history::History;
 
 #[derive(Args)]
 pub struct GussArgs {
@@ -34,7 +34,7 @@ struct AppState {
     input: String,
     running: bool,
     history: History,
-    /// The `vhp` clap tree, so navigation and help match what `vhp` accepts.
+    /// The `guss` clap tree, so navigation and help match what `guss` accepts.
     cli: clap::Command,
 }
 
@@ -128,9 +128,8 @@ impl AppState {
 }
 
 /// `cli` is the top-level clap command, so the shell's command list and help
-/// always match what `vhp` actually accepts.
+/// always match what `guss` actually accepts.
 pub fn run(args: GussArgs, cli: clap::Command) -> Result<()> {
-
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -155,10 +154,7 @@ pub fn run(args: GussArgs, cli: clap::Command) -> Result<()> {
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     result
@@ -215,27 +211,24 @@ fn tui_loop(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, state: &mut A
 fn ui(f: &mut ratatui::Frame, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(3),
-                Constraint::Length(3),
-            ]
-            .as_ref(),
-        )
+        .constraints([Constraint::Min(3), Constraint::Length(3)].as_ref())
         .split(f.size());
 
     // Output area with scrolling
     let output_text: Vec<Line> = state.output_lines.iter().map(|l| Line::from(l.as_str())).collect();
     let output = Paragraph::new(output_text)
-        .block(Block::default().borders(Borders::ALL).title(format!(" {} (↑↓ scroll, ← → history) ", state.context.join(" > "))))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} (↑↓ scroll, ← → history) ", state.context.join(" > "))),
+        )
         .wrap(Wrap { trim: true })
         .scroll((state.scroll_pos as u16, 0));
     f.render_widget(output, chunks[0]);
 
     // Input area
     let input_text = format!("> {}", state.input);
-    let input = Paragraph::new(input_text)
-        .block(Block::default().borders(Borders::ALL).title(" INPUT "));
+    let input = Paragraph::new(input_text).block(Block::default().borders(Borders::ALL).title(" INPUT "));
     f.render_widget(input, chunks[1]);
 }
 
@@ -331,9 +324,9 @@ fn show_context_help(state: &mut AppState) {
 
 fn execute_and_capture(state: &mut AppState, args: &[String]) -> Result<()> {
     // Build, deploy, and docs open in separate terminal; others show in TUI
-    let is_separate_window = args.first().map(|s| s.as_str()) == Some("build") ||
-                             args.first().map(|s| s.as_str()) == Some("deploy") ||
-                             args.first().map(|s| s.as_str()) == Some("docs");
+    let is_separate_window = args.first().map(|s| s.as_str()) == Some("build")
+        || args.first().map(|s| s.as_str()) == Some("deploy")
+        || args.first().map(|s| s.as_str()) == Some("docs");
 
     if is_separate_window {
         execute_in_separate_window(args)?;
@@ -346,7 +339,7 @@ fn execute_and_capture(state: &mut AppState, args: &[String]) -> Result<()> {
 
 fn execute_in_separate_window(args: &[String]) -> Result<()> {
     let exe_path = std::env::current_exe()?;
-    vhp_common::terminal::spawn_in_terminal(&exe_path, args)
+    guss_common::terminal::spawn_in_terminal(&exe_path, args)
 }
 
 fn execute_with_output(state: &mut AppState, args: &[String]) -> Result<()> {
@@ -355,14 +348,12 @@ fn execute_with_output(state: &mut AppState, args: &[String]) -> Result<()> {
     use std::sync::mpsc;
 
     state.output_lines.clear();
-    state.add_output(format!("$ vhp {}", args.join(" ")));
+    state.add_output(format!("$ guss {}", args.join(" ")));
     state.add_output("".to_string());
 
     let exe_path = std::env::current_exe()?;
     let mut cmd = Command::new(exe_path);
-    cmd.args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     match cmd.spawn() {
         Ok(mut child) => {
@@ -416,7 +407,7 @@ mod tests {
 
     fn state() -> AppState {
         let leaf = |n: &'static str| clap::Command::new(n);
-        let cli = clap::Command::new("vhp")
+        let cli = clap::Command::new("guss")
             .subcommand(leaf("net"))
             .subcommand(leaf("deploy").subcommand(leaf("tools")).subcommand(leaf("logs")));
         AppState::new(cli)

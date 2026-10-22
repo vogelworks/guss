@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-use vhp_common::{Result, error::anyhow};
+use guss_common::{Result, error::anyhow};
 
 const CONFIG_FILE: &str = ".gitflow";
 
@@ -72,7 +72,7 @@ impl Config {
     pub fn load() -> Result<Self> {
         if !Path::new(CONFIG_FILE).exists() {
             return Err(anyhow!(
-                "not a project repository (no .gitflow file found). Run `vhp project init` first."
+                "not a project repository (no .gitflow file found). Run `guss project init` first."
             ));
         }
         let contents = fs::read_to_string(CONFIG_FILE)?;
@@ -146,10 +146,7 @@ mod tests {
 
     fn make_empty_dir(label: &str) -> std::path::PathBuf {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
         let dir = std::env::temp_dir().join(format!("gust_cfg_{}_{}", label, nanos));
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -162,11 +159,7 @@ mod tests {
         let _orig = crate::test_helpers::OrigDir::save_and_switch(&dir);
 
         let err = Config::load().unwrap_err().to_string();
-        assert!(
-            err.contains("vhp project init"),
-            "expected mention of `vhp project init`, got: {}",
-            err
-        );
+        assert!(err.contains("guss project init"), "expected mention of `guss project init`, got: {}", err);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1,4 +1,4 @@
-//! Git helpers shared by `project` (git-flow) and the VHP tasks (submodule
+//! Git helpers shared by `project` (git-flow) and the guss tasks (submodule
 //! branch switching in `net`/`build`/`deploy`). Originally `gust`'s standalone
 //! `git.rs`, made directory-aware and dry-run-aware.
 
@@ -45,10 +45,7 @@ pub fn current_branch(dir: &Path) -> Result<String> {
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
-        Err(anyhow!(
-            "not a git repository: {}",
-            dir.display()
-        ))
+        Err(anyhow!("not a git repository: {}", dir.display()))
     }
 }
 

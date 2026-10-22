@@ -4,11 +4,11 @@
 //! `deploy <cluster> [container...]` builds and runs those containers based on the
 //! cluster's environment type (local, net, or ecs).
 
-use clap::{Args, ValueEnum};
-use std::thread;
-use vhp_common::error::{Result, anyhow};
-use vhp_common::{clusters, config, docker, git, paths, proc, ui, version};
 use aws::{self, ssm};
+use clap::{Args, ValueEnum};
+use guss_common::error::{Result, anyhow};
+use guss_common::{clusters, config, docker, git, paths, proc, ui, version};
+use std::thread;
 
 #[derive(ValueEnum, Clone, Debug)]
 pub enum ToolsAction {
@@ -91,7 +91,7 @@ fn tools_cmd(
             "local" => {
                 ui::heading(&format!("cluster: {}", cluster));
                 ui::info(&format!("  environment -> local"));
-                let root = paths::project_vhp()?;
+                let root = paths::project_guss()?;
                 if let Some(compose) = cfg.compose_path(&root) {
                     ui::info(&format!("  compose -> {}", compose.display()));
                 }
@@ -120,8 +120,10 @@ fn tools_cmd(
     }
 
     // Local clusters use docker-compose
-    let root = paths::project_vhp()?;
-    let compose = cfg.compose_path(&root).ok_or_else(|| anyhow!("cluster '{}' has no compose file", cluster))?;
+    let root = paths::project_guss()?;
+    let compose = cfg
+        .compose_path(&root)
+        .ok_or_else(|| anyhow!("cluster '{}' has no compose file", cluster))?;
     let project = format!("deploy-{}", cluster);
 
     match action {
@@ -189,7 +191,7 @@ fn logs_with_search(mode: config::Mode, cluster: &str, command: &str) -> Result<
     // Pull the logs
     let logs = ssm::run_command(mode, cluster, command)?;
 
-    vhp_common::viewer::show(&logs)
+    guss_common::viewer::show(&logs)
 }
 
 fn tools_cmd_net(
@@ -212,9 +214,7 @@ fn tools_cmd_net(
             if container.is_empty() {
                 // Show logs from all services with interactive search
                 ui::heading(&format!("Deploy {} logs (all services, last {})", cluster, tail_count));
-                let cmd = format!(
-                    "sudo docker-compose -p {project} -f {compose} logs --tail {tail_count}"
-                );
+                let cmd = format!("sudo docker-compose -p {project} -f {compose} logs --tail {tail_count}");
 
                 if dry_run {
                     println!("  $ {cmd} (on {mode}-{cluster})");
@@ -226,9 +226,7 @@ fn tools_cmd_net(
                 let service_name = &container[0];
                 ui::heading(&format!("Deploy {} logs ({}, last {})", cluster, service_name, tail_count));
 
-                let cmd = format!(
-                    "sudo docker-compose -p {project} -f {compose} logs --tail {tail_count} {service_name}"
-                );
+                let cmd = format!("sudo docker-compose -p {project} -f {compose} logs --tail {tail_count} {service_name}");
 
                 if dry_run {
                     println!("  $ {cmd} (on {mode}-{cluster})");
@@ -238,12 +236,10 @@ fn tools_cmd_net(
             }
             Ok(())
         }
-        _ => {
-            Err(anyhow!(
-                "tool action '{:?}' not supported for net clusters (only logs is supported via SSM)",
-                action
-            ))
-        }
+        _ => Err(anyhow!(
+            "tool action '{:?}' not supported for net clusters (only logs is supported via SSM)",
+            action
+        )),
     }
 }
 
@@ -295,11 +291,7 @@ fn run_parallel(
         }
     }
     if !build_errors.is_empty() {
-        let errors = build_errors
-            .iter()
-            .map(|(n, e)| format!("  {n}: {e}"))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let errors = build_errors.iter().map(|(n, e)| format!("  {n}: {e}")).collect::<Vec<_>>().join("\n");
         return Err(anyhow!("Build failed:\n{errors}"));
     }
 
@@ -360,11 +352,7 @@ fn run_parallel(
             }
         }
         if !ecs_errors.is_empty() {
-            let errors = ecs_errors
-                .iter()
-                .map(|(n, e)| format!("  {n}: {e}"))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let errors = ecs_errors.iter().map(|(n, e)| format!("  {n}: {e}")).collect::<Vec<_>>().join("\n");
             return Err(anyhow!("ECS deployment failed:\n{errors}"));
         }
     } else {
@@ -392,11 +380,7 @@ fn run_parallel(
             }
         }
         if !push_errors.is_empty() {
-            let errors = push_errors
-                .iter()
-                .map(|(n, e)| format!("  {n}: {e}"))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let errors = push_errors.iter().map(|(n, e)| format!("  {n}: {e}")).collect::<Vec<_>>().join("\n");
             return Err(anyhow!("Push failed:\n{errors}"));
         }
 
@@ -444,11 +428,7 @@ fn run_parallel(
             }
         }
         if !deploy_errors.is_empty() {
-            let errors = deploy_errors
-                .iter()
-                .map(|(n, e)| format!("  {n}: {e}"))
-                .collect::<Vec<_>>()
-                .join("\n");
+            let errors = deploy_errors.iter().map(|(n, e)| format!("  {n}: {e}")).collect::<Vec<_>>().join("\n");
             return Err(anyhow!("Deploy failed:\n{errors}"));
         }
     }
@@ -469,18 +449,13 @@ fn build_container(r: &clusters::ResolvedContainer, mode: Option<config::Mode>, 
     };
 
     // For ECS containers, use the configured dockerfile; for others use default.
-    let dockerfile = if let Some(ecs) = &r.ecs {
-        ecs.dockerfile.as_str()
-    } else {
-        "Dockerfile"
-    };
+    let dockerfile = if let Some(ecs) = &r.ecs { ecs.dockerfile.as_str() } else { "Dockerfile" };
 
     // Build CONFIG_PATH arg if configured
     let config_arg = r.config.as_ref().and_then(|config_path| {
         let context_root = r.source.join(&r.build_context).canonicalize().ok()?;
         let config_abs = config_path.canonicalize().ok()?;
-        pathdiff::diff_paths(&config_abs, &context_root)
-            .map(|rel| format!("CONFIG_PATH={}", rel.display()))
+        pathdiff::diff_paths(&config_abs, &context_root).map(|rel| format!("CONFIG_PATH={}", rel.display()))
     });
 
     // Combine CONFIG_PATH (if present) with ECS build_args (if present)
@@ -521,21 +496,16 @@ fn ecs_deploy_container(
     dry_run: bool,
 ) -> Result<()> {
     let ecs_cfg = cfg.ecs.as_ref().ok_or_else(|| anyhow!("ECS cluster missing ecs configuration"))?;
-    let container_ecs = r.ecs.as_ref().ok_or_else(|| anyhow!("container '{}' missing ecs configuration", r.name))?;
+    let container_ecs = r
+        .ecs
+        .as_ref()
+        .ok_or_else(|| anyhow!("container '{}' missing ecs configuration", r.name))?;
 
     // Determine region
-    let region = if let Some(r) = &ecs_cfg.region {
-        r.clone()
-    } else {
-        ssm::get_region()?
-    };
+    let region = if let Some(r) = &ecs_cfg.region { r.clone() } else { ssm::get_region()? };
 
     // Determine account ID
-    let account = if let Some(a) = &ecs_cfg.account {
-        a.clone()
-    } else {
-        aws::account_id()?
-    };
+    let account = if let Some(a) = &ecs_cfg.account { a.clone() } else { aws::account_id()? };
 
     // Build ECR registry URL
     let registry = aws::ecr_registry(&account, &region);
@@ -564,7 +534,7 @@ fn ecs_deploy_container(
     // Resolve cluster name with mode template
     let cluster_name = ecs_cfg.cluster.as_str();
     let cluster_name = if cluster_name.is_empty() {
-        format!("vhp-cluster-{}", m.docker_tag())
+        format!("guss-cluster-{}", m.docker_tag())
     } else {
         cluster_name.replace("{mode}", m.docker_tag())
     };
@@ -595,7 +565,8 @@ pub fn run(args: DeployArgs) -> Result<()> {
     if cfg.environment != "local" && cfg.environment != "net" && cfg.environment != "ecs" {
         return Err(anyhow!(
             "cluster '{}' has unknown environment '{}' (expected: local, net, or ecs)",
-            cluster, cfg.environment
+            cluster,
+            cfg.environment
         ));
     }
 
@@ -622,15 +593,12 @@ pub fn run(args: DeployArgs) -> Result<()> {
                 return tools_cmd(&cfg, &cluster, action, &container, tail, dry_run);
             }
             _ => {
-                return Err(anyhow!(
-                    "--tools {:?} not supported for {} clusters",
-                    action, cfg.environment
-                ));
+                return Err(anyhow!("--tools {:?} not supported for {} clusters", action, cfg.environment));
             }
         }
     }
 
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     let vapi_root = paths::project_vapi()?;
     let settings = config::Settings::load()?;
     let mode = settings.get_mode()?;
@@ -643,10 +611,7 @@ pub fn run(args: DeployArgs) -> Result<()> {
     };
 
     if targets.is_empty() {
-        return Err(anyhow!(
-            "no containers to build in cluster '{}' (all marked bulk: false)",
-            cluster
-        ));
+        return Err(anyhow!("no containers to build in cluster '{}' (all marked bulk: false)", cluster));
     }
 
     ui::heading(&format!("Deploy {}", cluster));
@@ -654,10 +619,7 @@ pub fn run(args: DeployArgs) -> Result<()> {
     println!("       mode -> {}", cfg.environment);
 
     // Resolve all containers upfront
-    let resolved: Vec<clusters::ResolvedContainer> = targets
-        .iter()
-        .map(|name| cfg.resolve(name, &root, &vapi_root))
-        .collect::<Result<_>>()?;
+    let resolved: Vec<clusters::ResolvedContainer> = targets.iter().map(|name| cfg.resolve(name, &root, &vapi_root)).collect::<Result<_>>()?;
 
     // Read versions from containers for logging/checking (all environments/modes)
     let mut versions_seen = std::collections::HashMap::new();
@@ -699,17 +661,24 @@ pub fn run(args: DeployArgs) -> Result<()> {
                 git::require_mode_branch(&r.source, mode.unwrap())?;
             }
         }
-        return run_parallel(resolved, &cfg, &cluster, is_full_bulk, mode, yes, dry_run, no_cache, &root, &versions_seen);
+        return run_parallel(
+            resolved,
+            &cfg,
+            &cluster,
+            is_full_bulk,
+            mode,
+            yes,
+            dry_run,
+            no_cache,
+            &root,
+            &versions_seen,
+        );
     }
 
     // Single container: sequential path
     for r in &resolved {
         // Determine image name and build dockerfile/args based on environment
-        let dockerfile = if let Some(ecs) = &r.ecs {
-            ecs.dockerfile.as_str()
-        } else {
-            "Dockerfile"
-        };
+        let dockerfile = if let Some(ecs) = &r.ecs { ecs.dockerfile.as_str() } else { "Dockerfile" };
 
         let image = if cfg.environment == "net" || cfg.environment == "ecs" {
             let mode = settings.get_mode()?.for_deployment();
@@ -724,8 +693,7 @@ pub fn run(args: DeployArgs) -> Result<()> {
         let config_arg = r.config.as_ref().and_then(|config_path| {
             let context_root = r.source.join(&r.build_context).canonicalize().ok()?;
             let config_abs = config_path.canonicalize().ok()?;
-            pathdiff::diff_paths(&config_abs, &context_root)
-                .map(|rel| format!("CONFIG_PATH={}", rel.display()))
+            pathdiff::diff_paths(&config_abs, &context_root).map(|rel| format!("CONFIG_PATH={}", rel.display()))
         });
 
         // Combine CONFIG_PATH (if present) with ECS build_args (if present)
@@ -779,10 +747,12 @@ pub fn run(args: DeployArgs) -> Result<()> {
             }
             ui::good(&format!("deployed {} to ECS", r.name));
         } else {
-            let compose = cfg.compose_path(&root).ok_or_else(|| anyhow!("cluster '{}' has no compose file", cluster))?;
-            let compose_dir = compose.parent().ok_or_else(|| {
-                anyhow!("compose path has no parent: {}", compose.display())
-            })?;
+            let compose = cfg
+                .compose_path(&root)
+                .ok_or_else(|| anyhow!("cluster '{}' has no compose file", cluster))?;
+            let compose_dir = compose
+                .parent()
+                .ok_or_else(|| anyhow!("compose path has no parent: {}", compose.display()))?;
             let project = format!("deploy-{}", cluster);
 
             proc::run_in(
@@ -836,9 +806,7 @@ fn list_ecr_repos(region: &str, details: bool) -> Result<()> {
             let uri = repo["repositoryUri"].as_str().unwrap_or("?");
 
             if details {
-                let image_count = repo["imageScanningConfiguration"]["scanOnPush"]
-                    .as_bool()
-                    .unwrap_or(false);
+                let image_count = repo["imageScanningConfiguration"]["scanOnPush"].as_bool().unwrap_or(false);
                 println!("  {}", name);
                 println!("    URI: {}", uri);
                 println!("    Scan on push: {}", image_count);
@@ -853,16 +821,7 @@ fn list_ecr_repos(region: &str, details: bool) -> Result<()> {
 fn list_ecs_clusters(region: &str, details: bool) -> Result<()> {
     let clusters = proc::capture(
         "aws",
-        &[
-            "ecs",
-            "list-clusters",
-            "--region",
-            region,
-            "--query",
-            "clusterArns[]",
-            "--output",
-            "json",
-        ],
+        &["ecs", "list-clusters", "--region", region, "--query", "clusterArns[]", "--output", "json"],
     )?;
 
     if clusters.trim() == "[]" {
@@ -987,7 +946,7 @@ fn list_task_definitions(region: &str, details: bool) -> Result<()> {
 }
 
 fn show_deploy_details(cluster: &str, container: &[String]) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     let deployments = version::get_deploy_details(&root, cluster, container)?;
 
     if deployments.is_empty() {

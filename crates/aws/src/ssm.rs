@@ -1,11 +1,11 @@
 //! AWS Systems Manager Session Manager: resolve service names and connect/run commands.
 
-use std::time::Duration;
+use guss_common::config::Mode;
+use guss_common::error::{Result, anyhow};
+use guss_common::proc;
+use guss_common::ui;
 use std::io::Write;
-use vhp_common::error::{Result, anyhow};
-use vhp_common::proc;
-use vhp_common::config::Mode;
-use vhp_common::ui;
+use std::time::Duration;
 
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const MAX_POLLS: u32 = 60; // ~2 minutes
@@ -40,21 +40,14 @@ pub fn resolve_target(mode: Mode, service: &str) -> Result<String> {
     match out.split_whitespace().collect::<Vec<_>>().as_slice() {
         [] => Err(anyhow!("no running instance tagged Name={name}")),
         [id] => Ok(id.to_string()),
-        ids => Err(anyhow!(
-            "multiple running instances tagged Name={name}: {}",
-            ids.join(", ")
-        )),
+        ids => Err(anyhow!("multiple running instances tagged Name={name}: {}", ids.join(", "))),
     }
 }
 
 /// Open an interactive SSM session to `{mode}-{service}`.
 pub fn connect(mode: Mode, service: &str) -> Result<()> {
     let instance_id = resolve_target(mode, service)?;
-    proc::run(
-        "aws",
-        &["ssm", "start-session", "--target", &instance_id],
-        false,
-    )
+    proc::run("aws", &["ssm", "start-session", "--target", &instance_id], false)
 }
 
 /// Run a long-running command (like docker logs -f) and stream output in real-time.
@@ -127,7 +120,8 @@ pub fn run_command_streaming(mode: Mode, service: &str, command: &str) -> Result
                 "--output",
                 "text",
             ],
-        ).unwrap_or_default();
+        )
+        .unwrap_or_default();
 
         if output.len() > last_output_len {
             print!("{}", &output[last_output_len..]);
@@ -151,7 +145,8 @@ pub fn run_command_streaming(mode: Mode, service: &str, command: &str) -> Result
                     "--output",
                     "text",
                 ],
-            ).unwrap_or_default();
+            )
+            .unwrap_or_default();
             if !stderr.is_empty() {
                 eprintln!("[ssm] stderr: {}", stderr);
             }
@@ -243,7 +238,7 @@ fn run_command_with_timeout(mode: Mode, service: &str, command: &str, max_polls:
                         "--output",
                         "text",
                     ],
-                )
+                );
             }
             "Pending" | "InProgress" | "Delayed" => {
                 poll_count += 1;
@@ -282,10 +277,7 @@ mod tests {
 
     #[test]
     fn tag_filter_format() {
-        let filter = format!(
-            "Name=tag:Name,Values={}",
-            format!("{}-{}", Mode::Dev, "core")
-        );
+        let filter = format!("Name=tag:Name,Values={}", format!("{}-{}", Mode::Dev, "core"));
         assert_eq!(filter, "Name=tag:Name,Values=dev-core");
     }
 
@@ -300,10 +292,7 @@ mod tests {
 
     #[test]
     fn resolve_target_error_messages() {
-        let empty_msg = format!(
-            "{}",
-            anyhow!("no running instance tagged Name={}", "dev-core")
-        );
+        let empty_msg = format!("{}", anyhow!("no running instance tagged Name={}", "dev-core"));
         assert!(empty_msg.contains("no running instance"));
 
         let multi_msg = format!("{}", anyhow!("multiple running instances tagged Name={}: {}", "dev-core", "i-123, i-456"));

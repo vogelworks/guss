@@ -8,10 +8,10 @@ mod builder;
 
 use chrono::Local;
 use clap::Args;
+use guss_common::config;
+use guss_common::error::{Result, anyhow};
+use guss_common::{paths, ui, viewer};
 use std::fs;
-use vhp_common::config;
-use vhp_common::error::{Result, anyhow};
-use vhp_common::{paths, ui, viewer};
 
 #[derive(Args)]
 pub struct DocsArgs {
@@ -52,7 +52,7 @@ pub fn run(args: DocsArgs) -> Result<()> {
             search_default(&term)
         }
     } else {
-        Err(anyhow!("usage: vhp docs [-b [project]] | vhp docs <term> [--in <config>]"))
+        Err(anyhow!("usage: guss docs [-b [project]] | guss docs <term> [--in <config>]"))
     }
 }
 
@@ -61,11 +61,14 @@ fn search_config(term: &str, config_name: String) -> Result<()> {
     let settings = config::Settings::load()?;
     let cfg = settings.get_doc_config(&config_name)?;
 
-    let root = cfg.root.as_ref().ok_or_else(|| anyhow!("doc config '{}' must have root folder defined", config_name))?;
+    let root = cfg
+        .root
+        .as_ref()
+        .ok_or_else(|| anyhow!("doc config '{}' must have root folder defined", config_name))?;
     let search_root = if root.is_absolute() {
         root.clone()
     } else {
-        let base = settings.root.clone().unwrap_or(paths::project_vhp()?);
+        let base = settings.root.clone().unwrap_or(paths::project_guss()?);
         base.join(root)
     };
 
@@ -75,7 +78,7 @@ fn search_config(term: &str, config_name: String) -> Result<()> {
 /// Search docs in the global root/docs folder (default).
 fn search_default(term: &str) -> Result<()> {
     let settings = config::Settings::load()?;
-    let root = settings.root.clone().unwrap_or(paths::project_vhp()?);
+    let root = settings.root.clone().unwrap_or(paths::project_guss()?);
     let search_root = root.join("docs");
 
     if !search_root.is_dir() {
@@ -183,8 +186,7 @@ fn perform_search(needle: &str, files: &[(std::path::PathBuf, String)]) -> Vec<S
 
         if !has_headers {
             // Document without headers: treat entire document as one block
-            let document_matches = lines.iter()
-                .any(|l| l.to_lowercase().contains(&needle_lower));
+            let document_matches = lines.iter().any(|l| l.to_lowercase().contains(&needle_lower));
 
             if document_matches {
                 results.push(SearchResult {
@@ -207,9 +209,7 @@ fn perform_search(needle: &str, files: &[(std::path::PathBuf, String)]) -> Vec<S
                         .map(|p| i + 1 + p)
                         .unwrap_or(lines.len());
 
-                    let section_matches = lines[i..section_end]
-                        .iter()
-                        .any(|l| l.to_lowercase().contains(&needle_lower));
+                    let section_matches = lines[i..section_end].iter().any(|l| l.to_lowercase().contains(&needle_lower));
 
                     if section_matches {
                         match deepest_level {

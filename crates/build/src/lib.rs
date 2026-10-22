@@ -5,11 +5,11 @@
 //! - `build <config> <app>` — build and publish a single app, with no git or deploy step.
 
 use clap::Args;
+use guss_common::error::{Result, anyhow};
+use guss_common::{config, git, paths, proc, ui, version};
 use std::fs;
 use std::path::Path;
 use std::thread;
-use vhp_common::error::{Result, anyhow};
-use vhp_common::{config, git, paths, proc, ui, version};
 
 #[derive(Args)]
 #[command(disable_version_flag = true)]
@@ -33,7 +33,6 @@ pub struct BuildArgs {
     details: bool,
 }
 
-
 pub fn run(args: BuildArgs) -> Result<()> {
     let settings = config::Settings::load()?;
     let mode = settings.get_mode()?;
@@ -49,13 +48,8 @@ pub fn run(args: BuildArgs) -> Result<()> {
     }
 }
 
-fn build_all(
-    config: &config::BuildConfig,
-    mode: config::Mode,
-    yes: bool,
-    dry_run: bool,
-) -> Result<()> {
-    let root = paths::project_vhp()?;
+fn build_all(config: &config::BuildConfig, mode: config::Mode, yes: bool, dry_run: bool) -> Result<()> {
+    let root = paths::project_guss()?;
     let src_repo = root.join(&config.root_src);
     let dest_repo = root.join(&config.root_dest);
 
@@ -83,9 +77,7 @@ fn build_all(
         let npm_script = app.npm_script.clone();
         let src_repo_clone = src_repo.clone();
 
-        let handle = thread::spawn(move || {
-            proc::run_in(&src_repo_clone, "npm", &["run", &npm_script], false)
-        });
+        let handle = thread::spawn(move || proc::run_in(&src_repo_clone, "npm", &["run", &npm_script], false));
         handles.push((app_name, handle));
     }
 
@@ -174,13 +166,8 @@ fn build_all(
     Ok(())
 }
 
-fn build_one(
-    config: &config::BuildConfig,
-    app_name: &str,
-    mode: config::Mode,
-    dry_run: bool,
-) -> Result<()> {
-    let root = paths::project_vhp()?;
+fn build_one(config: &config::BuildConfig, app_name: &str, mode: config::Mode, dry_run: bool) -> Result<()> {
+    let root = paths::project_guss()?;
     let src_repo = root.join(&config.root_src);
     let dest_repo = root.join(&config.root_dest);
 
@@ -245,7 +232,7 @@ fn publish_app(app: &config::BuildApp, src_repo: &Path, dest_repo: &Path, dry_ru
 }
 
 fn show_build_details(config: &config::BuildConfig) -> Result<()> {
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
     let (versions, deployments) = version::get_build_details(&root, &config.name, &config.root_dest)?;
 
     if versions.is_empty() && deployments.is_empty() {
@@ -279,13 +266,7 @@ mod tests {
 
     #[test]
     fn commit_message_includes_version() {
-        assert_eq!(
-            commit_message("Build for", config::Mode::Dev, "1.0.0"),
-            "Build for dev - version 1.0.0"
-        );
-        assert_eq!(
-            commit_message("Build for", config::Mode::Prod, "2.4.0"),
-            "Build for prod - version 2.4.0"
-        );
+        assert_eq!(commit_message("Build for", config::Mode::Dev, "1.0.0"), "Build for dev - version 1.0.0");
+        assert_eq!(commit_message("Build for", config::Mode::Prod, "2.4.0"), "Build for prod - version 2.4.0");
     }
 }

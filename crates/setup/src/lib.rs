@@ -1,38 +1,37 @@
 //! `setup` task: install the toolset and manage this machine's environment.
 //!
-//! Replaces the old model (`vhp-setup.sh` + `setups/*.sh` copying each `.sh`
+//! Replaces the old model (`guss-setup.sh` + `setups/*.sh` copying each `.sh`
 //! into `/usr/local/bin`). The lifecycle is split by who runs it:
 //!
-//! * `init` configures a machine that already has a `vhp` binary — the path a
+//! * `init` configures a machine that already has a `guss` binary — the path a
 //!   teammate with no Rust toolchain takes;
 //! * `install` is the build-from-source path, for contributors;
 //! * `publish`/`update` move signed release tarballs (see [`release`]);
 //! * `uninstall` reverses `init`/`install`.
 //!
-//! Also home to the `login`/`status`/`logout` wrappers over `vhp_common::auth`.
+//! Also home to the `login`/`status`/`logout` wrappers over `guss_common::auth`.
 
 pub mod release;
 
 use clap::{Args, Subcommand};
+use guss_common::error::{Result, anyhow};
+use guss_common::{config, paths, proc, ui};
 use std::fs;
 use std::path::{Path, PathBuf};
-use vhp_common::error::{Result, anyhow};
-use vhp_common::{config, paths, proc, ui};
 
 /// (release binary name, installed command name) for every workspace binary.
 /// Every task (`net`, `build`, `deploy`, `vapi`, `stack`, `docs`, `jump`, `setup`,
-/// `project`) is a subcommand of `vhp`, not its own binary — `vhp` is the
+/// `project`) is a subcommand of `guss`, not its own binary — `guss` is the
 /// only binary this installs.
-const BINARIES: &[(&str, &str)] = &[("vhp", "vhp")];
+const BINARIES: &[(&str, &str)] = &[("guss", "guss")];
 
 /// The submodule repos that `install`/`git-pull` refresh.
 const REPOS: &[&str] = &["applications", "webserver", "network"];
 
 /// Marker + body of the `jump` shell function appended to the user's rc.
-const JUMP_FN_MARKER: &str = "# vhp-jump";
-const JUMP_FN_END: &str = "# vhp-jump-end";
-const JUMP_FN_BODY: &str =
-    "jump() { local d; d=\"$(vhp jump \"$@\")\" || return; cd \"$d\"; }\n";
+const JUMP_FN_MARKER: &str = "# guss-jump";
+const JUMP_FN_END: &str = "# guss-jump-end";
+const JUMP_FN_BODY: &str = "jump() { local d; d=\"$(guss jump \"$@\")\" || return; cd \"$d\"; }\n";
 
 /// Default install location. `~/.local/bin` needs no `sudo`, unlike the old
 /// `/usr/local/bin`.
@@ -46,12 +45,12 @@ pub struct SetupArgs {
 
 #[derive(Subcommand)]
 enum SetupCmd {
-    /// Configure this machine for an already-installed `vhp` (no cargo needed).
+    /// Configure this machine for an already-installed `guss` (no cargo needed).
     Init {
-        /// The project-vhp checkout to record. Default: detected from the cwd.
+        /// The project-guss checkout to record. Default: detected from the cwd.
         #[arg(long)]
         root: Option<PathBuf>,
-        /// Directory the `vhp` command lives in, recorded for uninstall.
+        /// Directory the `guss` command lives in, recorded for uninstall.
         #[arg(long, default_value = DEFAULT_PREFIX)]
         prefix: String,
         /// Skip pulling the submodule repos.
@@ -76,7 +75,7 @@ enum SetupCmd {
     Uninstall {
         #[arg(long, default_value = DEFAULT_PREFIX)]
         prefix: String,
-        /// Also delete `~/.config/vhp` (keys, tokens, stack registry).
+        /// Also delete `~/.config/guss` (keys, tokens, stack registry).
         #[arg(long)]
         purge: bool,
         #[arg(short, long)]
@@ -121,7 +120,7 @@ enum SetupCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Print the reference list of VHP admin commands.
+    /// Print the reference list of guss admin commands.
     Reference,
     /// Log in to the central login server and cache a session token.
     Login {
@@ -141,11 +140,7 @@ impl SetupArgs {
     /// session — `init`/`update` are how a machine reaches a usable state).
     pub fn permission_key(&self) -> Option<String> {
         match &self.command {
-            SetupCmd::Login { .. }
-            | SetupCmd::Status
-            | SetupCmd::Logout
-            | SetupCmd::Init { .. }
-            | SetupCmd::Update { .. } => None,
+            SetupCmd::Login { .. } | SetupCmd::Status | SetupCmd::Logout | SetupCmd::Init { .. } | SetupCmd::Update { .. } => None,
             SetupCmd::Publish { .. } => Some("setup:publish".to_string()),
             _ => Some("setup".to_string()),
         }
@@ -161,23 +156,10 @@ pub fn run(args: SetupArgs) -> Result<()> {
             yes,
             dry_run,
         } => init(root.as_deref(), &prefix, no_pull, yes, dry_run),
-        SetupCmd::Install {
-            prefix,
-            yes,
-            dry_run,
-        } => install(&prefix, yes, dry_run),
-        SetupCmd::Uninstall {
-            prefix,
-            purge,
-            yes,
-            dry_run,
-        } => uninstall(&prefix, purge, yes, dry_run),
+        SetupCmd::Install { prefix, yes, dry_run } => install(&prefix, yes, dry_run),
+        SetupCmd::Uninstall { prefix, purge, yes, dry_run } => uninstall(&prefix, purge, yes, dry_run),
         SetupCmd::Keygen { force, yes } => release::keygen(force, yes),
-        SetupCmd::Publish {
-            channel,
-            yes,
-            dry_run,
-        } => release::publish(channel, yes, dry_run),
+        SetupCmd::Publish { channel, yes, dry_run } => release::publish(channel, yes, dry_run),
         SetupCmd::Update {
             channel,
             tag,
@@ -207,20 +189,14 @@ fn expand_prefix(prefix: &str) -> Result<PathBuf> {
 
 // --- init -------------------------------------------------------------------
 
-fn init(
-    root: Option<&Path>,
-    prefix: &str,
-    no_pull: bool,
-    yes: bool,
-    dry_run: bool,
-) -> Result<()> {
+fn init(root: Option<&Path>, prefix: &str, no_pull: bool, yes: bool, dry_run: bool) -> Result<()> {
     let prefix = expand_prefix(prefix)?;
     let root = match root {
         Some(root) => root.to_path_buf(),
         None => detect_root()?,
     };
 
-    ui::heading("VHP setup init");
+    ui::heading("guss setup init");
     println!(
         "  checkout  -> {}\n  config    -> {}\n  prefix    -> {}",
         root.display(),
@@ -238,7 +214,7 @@ fn init(
     }
 
     ui::good("init complete");
-    ui::info("Reminders: put your aws credentials in ~/.aws, then run `vhp net init` to set your deployment mode.");
+    ui::info("Reminders: put your aws credentials in ~/.aws, then run `guss net init` to set your deployment mode.");
     ui::info("Restart your shell (or `source ~/.bashrc`) to pick up the `jump` function.");
     Ok(())
 }
@@ -253,15 +229,10 @@ fn detect_root() -> Result<PathBuf> {
             return Ok(dir.to_path_buf());
         }
     }
-    paths::project_vhp().map_err(|_| {
-        anyhow!(
-            "could not find a project-vhp checkout above {} — pass --root <dir>",
-            cwd.display()
-        )
-    })
+    paths::project_guss().map_err(|_| anyhow!("could not find a project-guss checkout above {} — pass --root <dir>", cwd.display()))
 }
 
-/// Record the checkout in `~/.config/vhp/config.toml`, preserving any `[auth]` /
+/// Record the checkout in `~/.config/guss/config.toml`, preserving any `[auth]` /
 /// `[release]` sections already there.
 fn write_settings(root: &Path, dry_run: bool) -> Result<()> {
     let path = config::config_file()?;
@@ -311,19 +282,13 @@ fn migrate_legacy_config(root: &Path, dry_run: bool) -> Result<()> {
     if moved.is_empty() {
         return Ok(());
     }
-    ui::info(&format!(
-        "  migrated {} from {} (originals kept)",
-        moved.join(", "),
-        legacy.display()
-    ));
+    ui::info(&format!("  migrated {} from {} (originals kept)", moved.join(", "), legacy.display()));
     Ok(())
 }
 
 fn ensure_mykey(dry_run: bool) -> Result<()> {
     let path = paths::mykey_file()?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow!("bad config path: {}", path.display()))?;
+    let parent = path.parent().ok_or_else(|| anyhow!("bad config path: {}", path.display()))?;
     println!("  ensure {}", path.display());
     if dry_run {
         return Ok(());
@@ -342,12 +307,8 @@ fn install(prefix: &str, yes: bool, dry_run: bool) -> Result<()> {
     let tools = paths::tools_dir()?;
     let release_dir = tools.join("target/release");
 
-    ui::heading("VHP tools install (from source)");
-    println!(
-        "  workspace -> {}\n  prefix    -> {}",
-        tools.display(),
-        prefix_dir.display()
-    );
+    ui::heading("guss tools install (from source)");
+    println!("  workspace -> {}\n  prefix    -> {}", tools.display(), prefix_dir.display());
     ui::require_confirm("Build release binaries and install?", yes)?;
 
     proc::run_in(&tools, "cargo", &["build", "--release", "--locked"], dry_run)?;
@@ -372,9 +333,7 @@ pub(crate) fn install_binary(src: &Path, dst: &Path, dry_run: bool) -> Result<()
     if !src.is_file() {
         return Err(anyhow!("no binary at {}", src.display()));
     }
-    let parent = dst
-        .parent()
-        .ok_or_else(|| anyhow!("bad install path: {}", dst.display()))?;
+    let parent = dst.parent().ok_or_else(|| anyhow!("bad install path: {}", dst.display()))?;
     fs::create_dir_all(parent)?;
 
     let staged = dst.with_extension("new");
@@ -390,7 +349,7 @@ pub(crate) fn install_binary(src: &Path, dst: &Path, dry_run: bool) -> Result<()
 
 fn uninstall(prefix: &str, purge: bool, yes: bool, dry_run: bool) -> Result<()> {
     let prefix_dir = expand_prefix(prefix)?;
-    ui::heading("VHP tools uninstall");
+    ui::heading("guss tools uninstall");
     println!("  prefix -> {}", prefix_dir.display());
     if purge {
         println!("  purge  -> {}", config::config_dir()?.display());
@@ -438,11 +397,7 @@ fn uninstall(prefix: &str, purge: bool, yes: bool, dry_run: bool) -> Result<()> 
 /// zsh users silently got no `jump`.
 fn rc_file() -> Result<PathBuf> {
     let shell = std::env::var("SHELL").unwrap_or_default();
-    let name = if shell.ends_with("zsh") {
-        ".zshrc"
-    } else {
-        ".bashrc"
-    };
+    let name = if shell.ends_with("zsh") { ".zshrc" } else { ".bashrc" };
     Ok(paths::home()?.join(name))
 }
 
@@ -522,9 +477,9 @@ fn strip_jump_block(text: &str) -> String {
 // --- misc -------------------------------------------------------------------
 
 fn git_pull(dry_run: bool) -> Result<()> {
-    let vhp = paths::project_vhp()?;
+    let guss = paths::project_guss()?;
     for repo in REPOS {
-        let dir = vhp.join(repo);
+        let dir = guss.join(repo);
         if dir.is_dir() {
             let _ = proc::run_in(&dir, "git", &["pull"], dry_run);
         } else {
@@ -535,19 +490,16 @@ fn git_pull(dry_run: bool) -> Result<()> {
 }
 
 fn login_cmd(user: &str) -> Result<()> {
-    ui::heading("VHP login");
+    ui::heading("guss login");
     println!("  logging in as {user}...");
-    let token = vhp_common::auth::login(user)?;
-    ui::good(&format!(
-        "logged in as {} — session valid until {}",
-        token.user, token.expires_at
-    ));
+    let token = guss_common::auth::login(user)?;
+    ui::good(&format!("logged in as {} — session valid until {}", token.user, token.expires_at));
     ui::info(&format!("  allowed: {}", token.allowed.join(", ")));
     Ok(())
 }
 
 fn status_cmd() -> Result<()> {
-    if !vhp_common::auth::is_configured()? {
+    if !guss_common::auth::is_configured()? {
         ui::good("auth is not configured — all commands are permitted");
         ui::info(&format!(
             "  add an [auth] section to {} to turn permissions on",
@@ -555,20 +507,20 @@ fn status_cmd() -> Result<()> {
         ));
         return Ok(());
     }
-    match vhp_common::auth::cached_token()? {
+    match guss_common::auth::cached_token()? {
         Some(token) => {
             ui::good(&format!("logged in as {}", token.user));
             ui::info(&format!("  machine   -> {}", token.machine_id));
             ui::info(&format!("  expires   -> {}", token.expires_at));
             ui::info(&format!("  allowed   -> {}", token.allowed.join(", ")));
         }
-        None => ui::warn("not logged in (or session expired) — run `vhp setup login <user>`"),
+        None => ui::warn("not logged in (or session expired) — run `guss setup login <user>`"),
     }
     Ok(())
 }
 
 fn logout_cmd() -> Result<()> {
-    vhp_common::auth::logout()?;
+    guss_common::auth::logout()?;
     ui::good("logged out (cached session token cleared)");
     Ok(())
 }
@@ -576,55 +528,55 @@ fn logout_cmd() -> Result<()> {
 fn print_help() {
     let text = "\
 _______________________________________________________________________________
-                            List of VHP Admin Tools
+                            List of guss Admin Tools
    Run `setup init` once (or `setup install` to build from source), then call
-   any task below as `vhp <task> ...`.
+   any task below as `guss <task> ...`.
    For things to work: put your aws credentials in ~/.aws.
 _______________________________________________________________________________
 
-vhp <command>     umbrella cli — dispatches to every task below
+guss <command>     umbrella cli — dispatches to every task below
 
-vhp net init                         set deployment mode (dev|prod|test)
-vhp net mode [dev|prod|test]         show or change current mode
-vhp net ssm <service>                open SSM session to {mode}-{service}
-vhp net status                       show deployment mode and network status
+guss net init                         set deployment mode (dev|prod|test)
+guss net mode [dev|prod|test]         show or change current mode
+guss net ssm <service>                open SSM session to {mode}-{service}
+guss net status                       show deployment mode and network status
 
-vhp build all <dev|prod> [version]     build all apps, publish, deploy
-vhp build local <app> <dev|prod>       build one app, no deploy
+guss build all <dev|prod> [version]     build all apps, publish, deploy
+guss build local <app> <dev|prod>       build one app, no deploy
 
-vhp deploy <cluster> <service> <dev|prod>  build + roll out one service to a cluster
+guss deploy <cluster> <service> <dev|prod>  build + roll out one service to a cluster
 
-vhp vapi deploy <dev|prod> [server]        deploy vapi services
-vhp vapi doc                               regenerate the connection docs
-vhp vapi local start [--build] | rebuild <svc>
-vhp vapi tools <logs|down>                 local compose helpers
+guss vapi deploy <dev|prod> [server]        deploy vapi services
+guss vapi doc                               regenerate the connection docs
+guss vapi local start [--build] | rebuild <svc>
+guss vapi tools <logs|down>                 local compose helpers
 
-vhp stack list                             registered local compose stacks
-vhp stack doctor [name]                    check docker/ports/env before starting
-vhp stack up [name] [--build]              compose up -d
-vhp stack rebuild [name] <svc>             rebuild + restart one service
-vhp stack <down|stop|start|restart|ps|logs> [name]
+guss stack list                             registered local compose stacks
+guss stack doctor [name]                    check docker/ports/env before starting
+guss stack up [name] [--build]              compose up -d
+guss stack rebuild [name] <svc>             rebuild + restart one service
+guss stack <down|stop|start|restart|ps|logs> [name]
 
-vhp docs build [server]          regenerate vapi-docs.md
-vhp docs search <term>           search the docs for a route/controller
+guss docs build [server]          regenerate vapi-docs.md
+guss docs search <term>           search the docs for a route/controller
 
-vhp jump <group> [name]          cd to a project folder group (a|n|b|d|p|s|ws|v|vp)
+guss jump <group> [name]          cd to a project folder group (a|n|b|d|p|s|ws|v|vp)
                                  (installed as the shell function `jump`)
 
-vhp project init                          initialize git-flow branch config in this repo
-vhp project feature <start|finish|publish|list> <name>
-vhp project release <start|finish|publish> <version>
-vhp project hotfix <start|finish> <version>
+guss project init                          initialize git-flow branch config in this repo
+guss project feature <start|finish|publish|list> <name>
+guss project release <start|finish|publish> <version>
+guss project hotfix <start|finish> <version>
 
-vhp setup init                   configure this machine (no cargo needed)
-vhp setup install                build from source and install
-vhp setup update [--channel]     fetch and install a newer signed release
-vhp setup publish <dev|prod>     build, sign, and publish a release
-vhp setup keygen                 generate this machine's release signing key
-vhp setup uninstall [--purge]    remove the binary and shell function
-vhp setup login <user>           log in to the central login server
-vhp setup status                 show the current login/session status
-vhp setup logout                 clear the cached session token
+guss setup init                   configure this machine (no cargo needed)
+guss setup install                build from source and install
+guss setup update [--channel]     fetch and install a newer signed release
+guss setup publish <dev|prod>     build, sign, and publish a release
+guss setup keygen                 generate this machine's release signing key
+guss setup uninstall [--purge]    remove the binary and shell function
+guss setup login <user>           log in to the central login server
+guss setup status                 show the current login/session status
+guss setup logout                 clear the cached session token
 _______________________________________________________________________________";
     println!("{text}");
 }
@@ -636,15 +588,9 @@ mod tests {
     #[test]
     fn prefix_expands_a_leading_tilde() {
         let home = paths::home().unwrap();
-        assert_eq!(
-            expand_prefix("~/.local/bin").unwrap(),
-            home.join(".local/bin")
-        );
+        assert_eq!(expand_prefix("~/.local/bin").unwrap(), home.join(".local/bin"));
         // No tilde: taken literally, including a bare "~" which is not a prefix.
-        assert_eq!(
-            expand_prefix("/usr/local/bin").unwrap(),
-            PathBuf::from("/usr/local/bin")
-        );
+        assert_eq!(expand_prefix("/usr/local/bin").unwrap(), PathBuf::from("/usr/local/bin"));
     }
 
     #[test]
@@ -656,7 +602,7 @@ mod tests {
     #[test]
     fn strip_handles_the_old_unterminated_format() {
         // Installs before JUMP_FN_END existed wrote marker + one function line.
-        let rc = "export A=1\n# vhp-jump\njump() { local d; d=\"$(vhp jump \"$@\")\" || return; cd \"$d\"; }\nexport B=2\n";
+        let rc = "export A=1\n# guss-jump\njump() { local d; d=\"$(guss jump \"$@\")\" || return; cd \"$d\"; }\nexport B=2\n";
         assert_eq!(strip_jump_block(rc), "export A=1\nexport B=2\n");
     }
 
@@ -678,7 +624,7 @@ mod tests {
     fn strip_keeps_hand_edited_block_contents() {
         // If someone edited inside the markers, removing their line silently
         // would be worse than leaving it behind.
-        let rc = "# vhp-jump\nexport MINE=1\n# vhp-jump-end\n";
+        let rc = "# guss-jump\nexport MINE=1\n# guss-jump-end\n";
         assert_eq!(strip_jump_block(rc), "export MINE=1\n");
     }
 }

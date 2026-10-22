@@ -23,9 +23,7 @@ const CLUSTER_PORTS: &[(&str, u16)] = &[
 /// Render the `~/.ssh/config` contents for a given bastion IP and ssh key name.
 pub fn render_config(bastion_ip: &str, mykey: &str) -> String {
     let mut out = String::new();
-    out.push_str(
-        "Host vhpdev\n\tHostName 192.168.0.120\n\tUser devteam\n\tPort 22\n\tIdentityFile ~/.ssh/devteam.pub\n\n",
-    );
+    out.push_str("Host gussdev\n\tHostName 192.168.0.120\n\tUser devteam\n\tPort 22\n\tIdentityFile ~/.ssh/devteam.pub\n\n");
     out.push_str(&format!(
         "Host bastion\n\tHostName {bastion_ip}\n\tUser ec2-user\n\tPort 22\n\tIdentityFile ~/.ssh/{mykey}\n\n"
     ));

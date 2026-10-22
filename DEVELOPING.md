@@ -1,8 +1,8 @@
-# Developing `vhp`
+# Developing `guss`
 
 A cheatsheet for working on the CLI itself.
 
-**For using `vhp`:** [docs/Help/vhp-cli.md](../docs/Help/vhp-cli.md) (setup: [docs/Setup/vhp-cli-setup.md](../docs/Setup/vhp-cli-setup.md)).  
+**For using `guss`:** [docs/Help/guss-cli.md](../docs/Help/guss-cli.md) (setup: [docs/Setup/guss-cli-setup.md](../docs/Setup/guss-cli-setup.md)).  
 **For architecture & deeper details:** [TECHNICAL.md](TECHNICAL.md).
 
 ---
@@ -13,7 +13,7 @@ A cheatsheet for working on the CLI itself.
 guss/
 ├── Cargo.toml            workspace root — deps pinned once in [workspace.dependencies]
 ├── rust-toolchain.toml   pins 1.97.0 + the musl target; applies automatically here
-├── cli/src/main.rs       the ONLY binary (`vhp`). Wiring + the single auth gate.
+├── cli/src/main.rs       the ONLY binary (`guss`). Wiring + the single auth gate.
 └── crates/
     ├── common/           shared: proc, paths, config, auth, git, ssh, docker, ui, db
     ├── aws/              AWS operations (SSM, ECR, ECS, etc.)
@@ -27,7 +27,7 @@ does nothing but forward.
 |---|---|
 | `common/src/proc.rs` | **all** subprocess calls go through here |
 | `common/src/paths.rs` | every filesystem path; repo paths vs config paths |
-| `common/src/config.rs` | `~/.config/vhp/config.toml` — settings, outside any checkout |
+| `common/src/config.rs` | `~/.config/guss/config.toml` — settings, outside any checkout |
 | `common/src/ui.rs` | headings, colored output, `require_confirm` |
 | `common/src/auth.rs` | the permission gate (fails open until `[auth]` is set) |
 
@@ -35,15 +35,15 @@ does nothing but forward.
 
 ## Shortcuts
 
-Installed in `~/.bashrc` under the `# vhp-dev` marker (delete that block to undo):
+Installed in `~/.bashrc` under the `# guss-dev` marker (delete that block to undo):
 
 | Alias | Does |
 |---|---|
 | `v <args>` | build-and-run — always current, works from any directory |
-| `vv <args>` | run the prebuilt `target/debug/vhp` — instant, stale until `vb` |
+| `vv <args>` | run the prebuilt `target/debug/guss` — instant, stale until `vb` |
 | `vb` | `cargo build --workspace` |
 | `vt` | `cargo test --workspace` |
-| `vfresh <args>` | run against a throwaway `HOME` (`/tmp/vhp-fresh`) |
+| `vfresh <args>` | run against a throwaway `HOME` (`/tmp/guss-fresh`) |
 
 `v` uses `--manifest-path` rather than `cd`, so **your working directory is
 preserved** — which matters, because some commands detect their context by walking
@@ -70,15 +70,15 @@ vt require_confirm                  # by name substring
 Three overrides, in increasing order of blast radius:
 
 ```bash
-VHP_ROOT=/tmp/nope v jump a                    # pretend the checkout is elsewhere
+guss_ROOT=/tmp/nope v jump a                    # pretend the checkout is elsewhere
 XDG_CONFIG_HOME=/tmp/alt/.config v stack list  # different config, same home
-vfresh setup init --root ~/vhp/project-vhp --no-pull --yes   # fully separate HOME
+vfresh setup init --root ~/guss/project-guss --no-pull --yes   # fully separate HOME
 ```
 
 `vfresh` is the one to reach for when testing the install/config path. Config, keys,
-**and** the rc file all land under `/tmp/vhp-fresh`, so it exercises the real
+**and** the rc file all land under `/tmp/guss-fresh`, so it exercises the real
 first-run experience without touching your setup. Check what it touched with
-`find /tmp/vhp-fresh -type f`.
+`find /tmp/guss-fresh -type f`.
 
 ### Dry-run first
 
@@ -102,7 +102,7 @@ Follow these and a new command will look like the existing ones.
 turn a non-zero exit into an `Err`, and honor dry-run in one place.
 
 **Never build paths from `$HOME`.** Use `paths::*`. `jump` hardcoded
-`~/project-vhp` and silently walked to a different tree than every other task on a
+`~/project-guss` and silently walked to a different tree than every other task on a
 machine whose checkout lived elsewhere — that is the bug this rule prevents.
 
 **`dry_run: bool` is the last parameter**, threaded from the clap flag down to
@@ -151,7 +151,7 @@ decision out and pass the ambient inputs in**. That pattern is used throughout:
 
 | Public fn (reads the world) | Pure core (tested) |
 |---|---|
-| `paths::project_vhp()` | `resolve_root(home)` |
+| `paths::project_guss()` | `resolve_root(home)` |
 | `config::config_dir()` | `config_dir_from(xdg, home)` |
 | `auth::enforce(key)` | `decide(auth, token, key)` |
 | `config::resolve_mode()` | `resolve_mode_from(path)` |
@@ -167,7 +167,7 @@ If something is hard to test, it usually wants this split rather than a mock.
 |---|---|
 | `setup publish` | needs `sudo apt install musl-tools` (`ring` compiles C for musl) |
 | `setup publish` local test | needs sshd — it uploads with `scp`, and `ssh localhost` is refused here |
-| `gh` not installed | `vhp project feature publish` (PR creation) won't work until it is |
+| `gh` not installed | `guss project feature publish` (PR creation) won't work until it is |
 
 ---
 
@@ -177,7 +177,7 @@ If something is hard to test, it usually wants this split rather than a mock.
 vb && vt                            # build clean, all tests green
 v setup status                      # gate reports "not configured"
 v deploy local --help               # config still resolves
-vfresh setup init --root ~/vhp/project-vhp --no-pull --yes   # first-run path intact
+vfresh setup init --root ~/guss/project-guss --no-pull --yes   # first-run path intact
 ```
 
 The last one is worth the ten seconds: most of what breaks in this tool breaks for

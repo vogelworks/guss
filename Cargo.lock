@@ -106,8 +106,8 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 name = "aws"
 version = "0.1.0"
 dependencies = [
+ "guss-common",
  "serde_json",
- "vhp-common",
 ]
 
 [[package]]
@@ -152,7 +152,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "deploy",
- "vhp-common",
+ "guss-common",
 ]
 
 [[package]]
@@ -289,10 +289,10 @@ dependencies = [
  "deploy",
  "docs",
  "guss",
+ "guss-common",
  "net",
  "project",
  "setup",
- "vhp-common",
 ]
 
 [[package]]
@@ -461,9 +461,9 @@ version = "0.1.0"
 dependencies = [
  "aws",
  "clap",
+ "guss-common",
  "pathdiff",
  "serde_json",
- "vhp-common",
 ]
 
 [[package]]
@@ -515,7 +515,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "clap",
- "vhp-common",
+ "guss-common",
 ]
 
 [[package]]
@@ -734,8 +734,28 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "crossterm",
+ "guss-common",
  "ratatui",
- "vhp-common",
+]
+
+[[package]]
+name = "guss-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "chrono",
+ "clap",
+ "colored",
+ "ed25519-dalek",
+ "postgres",
+ "rand_core 0.6.4",
+ "reqwest",
+ "rustyline",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -1181,8 +1201,8 @@ version = "0.1.0"
 dependencies = [
  "aws",
  "clap",
+ "guss-common",
  "saphyr",
- "vhp-common",
 ]
 
 [[package]]
@@ -1397,9 +1417,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "colored",
+ "guss-common",
  "serde",
  "toml",
- "vhp-common",
 ]
 
 [[package]]
@@ -1805,11 +1825,11 @@ dependencies = [
  "base64",
  "clap",
  "ed25519-dalek",
+ "guss-common",
  "rand_core 0.6.4",
  "reqwest",
  "serde",
  "toml",
- "vhp-common",
 ]
 
 [[package]]
@@ -2351,26 +2371,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vhp-common"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "chrono",
- "clap",
- "colored",
- "ed25519-dalek",
- "postgres",
- "rand_core 0.6.4",
- "reqwest",
- "rustyline",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
 
 [[package]]
 name = "want"

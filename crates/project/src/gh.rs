@@ -1,7 +1,7 @@
-//! GitHub CLI (`gh`) helpers for the `project` task, built on `vhp_common::proc`.
+//! GitHub CLI (`gh`) helpers for the `project` task, built on `guss_common::proc`.
 
-use vhp_common::Result;
-use vhp_common::proc;
+use guss_common::Result;
+use guss_common::proc;
 
 /// Return true if the `gh` CLI is installed and authenticated.
 pub fn is_available() -> bool {
@@ -12,10 +12,7 @@ pub fn is_available() -> bool {
 /// Uses --fill to populate title/body from commit messages.
 pub fn create_pr(head: &str, base: &str) -> Result<String> {
     println!("  gh pr create --head {head} --base {base} --fill");
-    proc::capture(
-        "gh",
-        &["pr", "create", "--head", head, "--base", base, "--fill"],
-    )
+    proc::capture("gh", &["pr", "create", "--head", head, "--base", base, "--fill"])
 }
 
 #[cfg(test)]

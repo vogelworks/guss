@@ -7,13 +7,13 @@
 //! - `net status` — show submodule status and the current ssh config
 //!   (ported from `net-status.sh`).
 
+use aws::ssm;
 use clap::{Args, Subcommand};
+use guss_common::error::Result;
+use guss_common::{clusters, config, git, paths, ui};
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use vhp_common::error::Result;
-use vhp_common::{clusters, config, git, paths, ui};
-use aws::ssm;
 
 mod template;
 
@@ -62,16 +62,12 @@ pub fn run(args: NetArgs) -> Result<()> {
         NetCmd::Mode { new_mode } => mode_cmd(new_mode),
         NetCmd::Ssm { service, command } => ssm_cmd(&service, &command),
         NetCmd::Status => status(),
-        NetCmd::Build {
-            master,
-            out,
-            dry_run,
-        } => build_template(master, out, dry_run),
+        NetCmd::Build { master, out, dry_run } => build_template(master, out, dry_run),
     }
 }
 
 fn collect_cluster_repos() -> Vec<String> {
-    let root = match paths::project_vhp() {
+    let root = match paths::project_guss() {
         Ok(r) => r,
         Err(_) => return Vec::new(),
     };
@@ -118,11 +114,8 @@ fn init() -> Result<()> {
     ui::heading("net init");
 
     if settings.mode.is_some() {
-        ui::warn(&format!(
-            "mode is already set to: {}",
-            settings.mode.unwrap()
-        ));
-        ui::info("Use 'vhp net mode <dev|prod|test>' to change it.");
+        ui::warn(&format!("mode is already set to: {}", settings.mode.unwrap()));
+        ui::info("Use 'guss net mode <dev|prod|test>' to change it.");
         return Ok(());
     }
 
@@ -135,8 +128,7 @@ fn init() -> Result<()> {
     io::stdout().flush()?;
     let mut mode_str = String::new();
     io::stdin().read_line(&mut mode_str)?;
-    let mode: config::Mode = mode_str.trim().parse()
-        .map_err(|e| vhp_common::error::anyhow!("{}", e))?;
+    let mode: config::Mode = mode_str.trim().parse().map_err(|e| guss_common::error::anyhow!("{}", e))?;
 
     settings.set_mode(mode)?;
     ui::good(&format!("mode set to: {}", mode));
@@ -154,8 +146,7 @@ fn mode_cmd(new_mode: Option<String>) -> Result<()> {
             ui::info(&format!("current mode: {}", current));
         }
         Some(mode_str) => {
-            let mode: config::Mode = mode_str.parse()
-                .map_err(|e| vhp_common::error::anyhow!("{}", e))?;
+            let mode: config::Mode = mode_str.parse().map_err(|e| guss_common::error::anyhow!("{}", e))?;
 
             // Collect all repos to manage: tracked_repos + applications/webserver + cluster container repos
             let home = paths::home()?;
@@ -198,9 +189,7 @@ fn mode_cmd(new_mode: Option<String>) -> Result<()> {
                 for repo in &dirty_repos {
                     println!("  - {}", repo);
                 }
-                return Err(vhp_common::error::anyhow!(
-                    "commit or stash changes before changing mode"
-                ));
+                return Err(guss_common::error::anyhow!("commit or stash changes before changing mode"));
             }
 
             settings.set_mode(mode)?;
@@ -304,7 +293,7 @@ fn status() -> Result<()> {
     ui::heading("deployment mode");
     match settings.mode {
         Some(mode) => ui::good(&format!("current mode: {}", mode)),
-        None => ui::warn("mode not configured — run 'vhp net init'"),
+        None => ui::warn("mode not configured — run 'guss net init'"),
     }
 
     ui::heading("network submodule STATUS");

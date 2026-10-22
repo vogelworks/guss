@@ -25,7 +25,7 @@
 //!   CLUSTER: mart
 //!   COMPOSE: |
 //!     mongomart:
-//!       image: cmv343/vhp-mongomart:dev
+//!       image: cmv343/guss-mongomart:dev
 //! ```
 //!
 //! `file` (required) is resolved relative to the including file's directory, same
@@ -38,10 +38,10 @@
 //! time, after this resolves — `{{VAR}}` was chosen specifically so it can never be
 //! confused with `!Sub`'s `${...}` syntax already present in these scripts.
 
+use guss_common::error::{Result, anyhow};
 use saphyr::{LoadableYamlNode, MappingOwned, Tag, Yaml, YamlEmitter, YamlOwned};
 use std::fs;
 use std::path::Path;
-use vhp_common::error::{Result, anyhow};
 
 fn is_include_tag(tag: &Tag) -> bool {
     tag.handle == "!" && tag.suffix == "include"
@@ -63,10 +63,12 @@ fn sub_tag() -> Tag {
 fn resolve_template(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
     let map = match node {
         YamlOwned::Mapping(map) => map,
-        _ => return Err(anyhow!(
-            "!template in {} must be a mapping with a `file` key and substitution variables",
-            dir.display()
-        )),
+        _ => {
+            return Err(anyhow!(
+                "!template in {} must be a mapping with a `file` key and substitution variables",
+                dir.display()
+            ));
+        }
     };
 
     let mut file: Option<String> = None;
@@ -91,9 +93,7 @@ fn resolve_template(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
             _ => {
                 let value = v
                     .as_str()
-                    .ok_or_else(|| {
-                        anyhow!("!template variable `{key}` in {} must be a plain string", dir.display())
-                    })?
+                    .ok_or_else(|| anyhow!("!template variable `{key}` in {} must be a plain string", dir.display()))?
                     .to_string();
                 vars.push((key, value));
             }
@@ -102,18 +102,13 @@ fn resolve_template(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
 
     let file = file.ok_or_else(|| anyhow!("!template mapping in {} is missing `file`", dir.display()))?;
     let template_path = dir.join(file);
-    let mut text = fs::read_to_string(&template_path)
-        .map_err(|e| anyhow!("reading template {}: {e}", template_path.display()))?;
+    let mut text = fs::read_to_string(&template_path).map_err(|e| anyhow!("reading template {}: {e}", template_path.display()))?;
     for (name, value) in &vars {
         text = text.replace(&format!("{{{{{name}}}}}"), value);
     }
     if let Some(start) = text.find("{{") {
         let end = (start + 40).min(text.len());
-        return Err(anyhow!(
-            "unresolved placeholder in {}: {}...",
-            template_path.display(),
-            &text[start..end]
-        ));
+        return Err(anyhow!("unresolved placeholder in {}: {}...", template_path.display(), &text[start..end]));
     }
 
     let value = YamlOwned::Value(saphyr::ScalarOwned::String(text));
@@ -126,10 +121,8 @@ fn resolve_template(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
 
 /// Parse `path` and recursively resolve every `!include` tag it contains.
 fn resolve(path: &Path) -> Result<YamlOwned> {
-    let contents =
-        fs::read_to_string(path).map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
-    let docs = YamlOwned::load_from_str(&contents)
-        .map_err(|e| anyhow!("parsing {}: {e}", path.display()))?;
+    let contents = fs::read_to_string(path).map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+    let docs = YamlOwned::load_from_str(&contents).map_err(|e| anyhow!("parsing {}: {e}", path.display()))?;
     let root = docs.into_iter().next().unwrap_or(YamlOwned::BadValue);
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     resolve_includes(root, dir)
@@ -151,15 +144,9 @@ fn resolve_includes(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
             let resolved_inner = resolve_includes(*inner, dir)?;
             resolve_template(resolved_inner, dir)
         }
-        YamlOwned::Tagged(tag, inner) => Ok(YamlOwned::Tagged(
-            tag,
-            Box::new(resolve_includes(*inner, dir)?),
-        )),
+        YamlOwned::Tagged(tag, inner) => Ok(YamlOwned::Tagged(tag, Box::new(resolve_includes(*inner, dir)?))),
         YamlOwned::Sequence(items) => {
-            let resolved = items
-                .into_iter()
-                .map(|item| resolve_includes(item, dir))
-                .collect::<Result<Vec<_>>>()?;
+            let resolved = items.into_iter().map(|item| resolve_includes(item, dir)).collect::<Result<Vec<_>>>()?;
             Ok(YamlOwned::Sequence(resolved))
         }
         YamlOwned::Mapping(map) => {
@@ -179,10 +166,7 @@ fn resolve_includes(node: YamlOwned, dir: &Path) -> Result<YamlOwned> {
 fn sort_mapping_keys(node: YamlOwned) -> YamlOwned {
     match node {
         YamlOwned::Mapping(map) => {
-            let mut entries: Vec<_> = map
-                .into_iter()
-                .map(|(k, v)| (sort_mapping_keys(k), sort_mapping_keys(v)))
-                .collect();
+            let mut entries: Vec<_> = map.into_iter().map(|(k, v)| (sort_mapping_keys(k), sort_mapping_keys(v))).collect();
             entries.sort_by(|a, b| a.0.as_str().unwrap_or_default().cmp(b.0.as_str().unwrap_or_default()));
             let mut sorted = MappingOwned::new();
             for (k, v) in entries {
@@ -190,9 +174,7 @@ fn sort_mapping_keys(node: YamlOwned) -> YamlOwned {
             }
             YamlOwned::Mapping(sorted)
         }
-        YamlOwned::Sequence(items) => {
-            YamlOwned::Sequence(items.into_iter().map(sort_mapping_keys).collect())
-        }
+        YamlOwned::Sequence(items) => YamlOwned::Sequence(items.into_iter().map(sort_mapping_keys).collect()),
         YamlOwned::Tagged(tag, inner) => YamlOwned::Tagged(tag, Box::new(sort_mapping_keys(*inner))),
         other => other,
     }
@@ -238,23 +220,12 @@ mod tests {
 
     #[test]
     fn resolves_include_and_preserves_other_tags() {
-        let dir = std::env::temp_dir().join(format!(
-            "vhp-net-template-test-{:?}",
-            std::thread::current().id()
-        ));
+        let dir = std::env::temp_dir().join(format!("guss-net-template-test-{:?}", std::thread::current().id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        write(
-            &dir,
-            "master.yml",
-            "Resources:\n  thing: !include ./resources/thing.yml\n",
-        );
-        write(
-            &dir,
-            "resources/thing.yml",
-            "Type: 'AWS::EC2::SecurityGroup'\nGroupId: !Ref someGroup\n",
-        );
+        write(&dir, "master.yml", "Resources:\n  thing: !include ./resources/thing.yml\n");
+        write(&dir, "resources/thing.yml", "Type: 'AWS::EC2::SecurityGroup'\nGroupId: !Ref someGroup\n");
 
         let resolved = resolve(&dir.join("master.yml")).unwrap();
         let text = emit(&resolved).unwrap();
@@ -268,23 +239,12 @@ mod tests {
 
     #[test]
     fn nested_include_resolves_relative_to_included_files_own_directory() {
-        let dir = std::env::temp_dir().join(format!(
-            "vhp-net-template-test-nested-{:?}",
-            std::thread::current().id()
-        ));
+        let dir = std::env::temp_dir().join(format!("guss-net-template-test-nested-{:?}", std::thread::current().id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        write(
-            &dir,
-            "master.yml",
-            "Resources:\n  outer: !include ./a/outer.yml\n",
-        );
-        write(
-            &dir,
-            "a/outer.yml",
-            "Inner: !include ./inner.yml\n",
-        );
+        write(&dir, "master.yml", "Resources:\n  outer: !include ./a/outer.yml\n");
+        write(&dir, "a/outer.yml", "Inner: !include ./inner.yml\n");
         write(&dir, "a/inner.yml", "Value: 42\n");
 
         let resolved = resolve(&dir.join("master.yml")).unwrap();
@@ -298,22 +258,15 @@ mod tests {
 
     #[test]
     fn template_substitutes_vars_and_wraps_sub_when_requested() {
-        let dir = std::env::temp_dir().join(format!(
-            "vhp-net-template-test-tmpl-{:?}",
-            std::thread::current().id()
-        ));
+        let dir = std::env::temp_dir().join(format!("guss-net-template-test-tmpl-{:?}", std::thread::current().id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        write(
-            &dir,
-            "templates/userdata.sh",
-            "#!/bin/bash -xe\nsername={{CLUSTER}}\n{{COMPOSE}}\n",
-        );
+        write(&dir, "templates/userdata.sh", "#!/bin/bash -xe\nsername={{CLUSTER}}\n{{COMPOSE}}\n");
 
         // Two "clusters" sharing the same template — only CLUSTER/COMPOSE differ,
         // mirroring the real mart/reports/etc. duplication.
-        for (cluster, image) in [("mart", "vhp-mongomart"), ("reports", "vhp-reports")] {
+        for (cluster, image) in [("mart", "guss-mongomart"), ("reports", "guss-reports")] {
             write(
                 &dir,
                 &format!("resources/{cluster}/launch.yml"),
@@ -333,8 +286,8 @@ mod tests {
 
         assert!(text.contains("sername=mart"));
         assert!(text.contains("sername=reports"));
-        assert!(text.contains("cmv343/vhp-mongomart:dev"));
-        assert!(text.contains("cmv343/vhp-reports:dev"));
+        assert!(text.contains("cmv343/guss-mongomart:dev"));
+        assert!(text.contains("cmv343/guss-reports:dev"));
         assert!(text.contains("!Sub"));
         assert!(!text.contains("{{"));
         assert!(!text.contains("!template"));
@@ -344,19 +297,12 @@ mod tests {
 
     #[test]
     fn template_errors_on_unresolved_placeholder() {
-        let dir = std::env::temp_dir().join(format!(
-            "vhp-net-template-test-tmpl-err-{:?}",
-            std::thread::current().id()
-        ));
+        let dir = std::env::temp_dir().join(format!("guss-net-template-test-tmpl-err-{:?}", std::thread::current().id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
         write(&dir, "templates/userdata.sh", "sername={{CLUSTER}}\n");
-        write(
-            &dir,
-            "master.yml",
-            "UserData: !template\n  file: ./templates/userdata.sh\n",
-        );
+        write(&dir, "master.yml", "UserData: !template\n  file: ./templates/userdata.sh\n");
 
         let err = resolve(&dir.join("master.yml")).unwrap_err();
         assert!(err.to_string().contains("unresolved placeholder"));

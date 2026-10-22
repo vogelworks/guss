@@ -1,10 +1,10 @@
 //! Runs configured post-action hooks (`[[hooks]]` in `.gitflow`).
 //!
-//! Hooks only fire through `vhp project` commands — there's no real git hook
+//! Hooks only fire through `guss project` commands — there's no real git hook
 //! installed, so a bare `git push`/`git pull` in the repo bypasses them.
 
 use colored::Colorize;
-use vhp_common::{Result, error::anyhow};
+use guss_common::{Result, error::anyhow};
 
 use crate::config::Config;
 
@@ -26,12 +26,7 @@ pub fn run(config: &Config, event: &str, branch: &str) -> Result<()> {
             .status()
             .map_err(|e| anyhow!("failed to run hook `{}`: {}", hook.run, e))?;
         if !status.success() {
-            return Err(anyhow!(
-                "hook `{}` for event `{}` exited with {}",
-                hook.run,
-                event,
-                status
-            ));
+            return Err(anyhow!("hook `{}` for event `{}` exited with {}", hook.run, event, status));
         }
     }
     Ok(())
@@ -113,19 +108,12 @@ mod tests {
     fn runs_matching_hook() {
         let dir = std::env::temp_dir().join(format!(
             "gust_hook_test_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .subsec_nanos()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()
         ));
         let marker = dir.join("ran");
         std::fs::create_dir_all(&dir).unwrap();
 
-        let config = cfg_with_hook(
-            "feature.publish",
-            Some("feature/*"),
-            &format!("touch {}", marker.display()),
-        );
+        let config = cfg_with_hook("feature.publish", Some("feature/*"), &format!("touch {}", marker.display()));
 
         run(&config, "feature.publish", "feature/login").unwrap();
         assert!(marker.exists());

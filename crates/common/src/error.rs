@@ -6,5 +6,5 @@
 /// Workspace-wide result type. Backed by `anyhow` for ergonomic `?` and context.
 pub type Result<T> = anyhow::Result<T>;
 
-// Re-export so call sites can `use vhp_common::bail;` / `vhp_common::error::anyhow!(...)`.
+// Re-export so call sites can `use guss_common::bail;` / `guss_common::error::anyhow!(...)`.
 pub use anyhow::{Context, anyhow, bail};

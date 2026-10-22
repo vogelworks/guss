@@ -5,14 +5,14 @@
 //! Login uses a device keypair rather than a password: the CLI signs a
 //! server-issued nonce to prove it holds the private half already registered for
 //! this user+machine pair. The resulting session token is signed by the server
-//! and cached at `~/.config/vhp/token.toml` (see `paths::token_file`) so every
+//! and cached at `~/.config/guss/token.toml` (see `paths::token_file`) so every
 //! later command can check it locally, with no network round-trip per command.
 //!
 //! **The gate fails open until it is configured.** The login server's address and
 //! public key used to be compile-time constants, with the key a throwaway whose
 //! private half was discarded — so no valid token could ever exist, and every
 //! gated command failed on every machine that wasn't the "main server". Both now
-//! come from the `[auth]` section of `~/.config/vhp/config.toml`; when that
+//! come from the `[auth]` section of `~/.config/guss/config.toml`; when that
 //! section is absent, [`enforce`] allows everything. Adding the section is what
 //! turns permissions on, and pointing at a different server no longer needs a new
 //! release of the CLI.
@@ -47,9 +47,7 @@ fn require_auth_settings() -> Result<AuthSettings> {
 
 /// Decode a base64 ed25519 public key.
 fn verifying_key(encoded: &str) -> Result<VerifyingKey> {
-    let bytes = B64
-        .decode(encoded)
-        .context("public key is not valid base64")?;
+    let bytes = B64.decode(encoded).context("public key is not valid base64")?;
     let bytes: [u8; 32] = bytes
         .as_slice()
         .try_into()
@@ -86,18 +84,14 @@ impl Token {
     }
 
     fn verify_signature(&self, server_key: &VerifyingKey) -> Result<()> {
-        let sig_bytes = B64
-            .decode(&self.signature)
-            .context("cached token signature is not valid base64")?;
+        let sig_bytes = B64.decode(&self.signature).context("cached token signature is not valid base64")?;
         let sig_bytes: [u8; 64] = sig_bytes
             .as_slice()
             .try_into()
             .map_err(|_| anyhow!("cached token signature has the wrong length"))?;
-        server_key
-            .verify(&self.signing_bytes(), &Signature::from_bytes(&sig_bytes))
-            .map_err(|_| {
-                anyhow!("cached token failed signature verification — it may be tampered with, stale, or signed by a login server we don't yet trust")
-            })
+        server_key.verify(&self.signing_bytes(), &Signature::from_bytes(&sig_bytes)).map_err(|_| {
+            anyhow!("cached token failed signature verification — it may be tampered with, stale, or signed by a login server we don't yet trust")
+        })
     }
 
     fn is_expired(&self) -> bool {
@@ -106,10 +100,7 @@ impl Token {
 }
 
 fn now_unix() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
 /// Load an ed25519 signing key from `path`, generating and caching one at 0600 on
@@ -137,7 +128,7 @@ pub fn signing_key_at(path: &Path) -> Result<SigningKey> {
 }
 
 /// Load this machine's device signing key, generating and caching one
-/// (0600) at `~/.config/vhp/device.key` on first use.
+/// (0600) at `~/.config/guss/device.key` on first use.
 pub fn device_signing_key() -> Result<SigningKey> {
     signing_key_at(&paths::device_key_file()?)
 }
@@ -195,9 +186,7 @@ pub fn login(user: &str) -> Result<Token> {
         .json()
         .context("login server sent a challenge response we couldn't parse")?;
 
-    let nonce_bytes = B64
-        .decode(&challenge.nonce)
-        .context("login server sent a malformed nonce")?;
+    let nonce_bytes = B64.decode(&challenge.nonce).context("login server sent a malformed nonce")?;
     let signature = signing_key.sign(&nonce_bytes);
 
     let body = LoginRequest {
@@ -295,25 +284,18 @@ pub fn enforce(permission_key: &str) -> Result<()> {
 
 /// The permission decision itself, with both ambient inputs passed in so the
 /// policy is testable without a config file or a live login server.
-fn decide(
-    auth: Option<&AuthSettings>,
-    token: Option<&Token>,
-    permission_key: &str,
-) -> Result<()> {
+fn decide(auth: Option<&AuthSettings>, token: Option<&Token>, permission_key: &str) -> Result<()> {
     let Some(auth) = auth else {
         return Ok(());
     };
     let token = token.ok_or_else(|| {
         anyhow!(
-            "not logged in (or session expired) — run `vhp setup login <user>` (requires network to {})",
+            "not logged in (or session expired) — run `guss setup login <user>` (requires network to {})",
             auth.login_host
         )
     })?;
     let module = permission_key.split(':').next().unwrap_or(permission_key);
-    let allowed = token
-        .allowed
-        .iter()
-        .any(|a| a == module || a == permission_key);
+    let allowed = token.allowed.iter().any(|a| a == module || a == permission_key);
     if allowed {
         Ok(())
     } else {
@@ -396,9 +378,7 @@ mod tests {
     #[test]
     fn missing_grant_names_the_key_and_user() {
         let token = token(&["docs"]);
-        let err = decide(Some(&auth()), Some(&token), "deploy:prod")
-            .unwrap_err()
-            .to_string();
+        let err = decide(Some(&auth()), Some(&token), "deploy:prod").unwrap_err().to_string();
         assert!(err.contains("permission denied"), "got: {err}");
         assert!(err.contains("deploy:prod"), "got: {err}");
         assert!(err.contains("alice"), "got: {err}");
@@ -451,11 +431,8 @@ mod tests {
     #[test]
     fn signing_key_at_generates_then_reloads_the_same_key() {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        let dir = std::env::temp_dir().join(format!("vhp_auth_key_{nanos}"));
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
+        let dir = std::env::temp_dir().join(format!("guss_auth_key_{nanos}"));
         let path = dir.join("nested/test.key");
 
         let first = signing_key_at(&path).unwrap();

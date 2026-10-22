@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct EcsCluster {
-    /// ECS cluster name (supports {mode} template, defaults to vhp-cluster-{mode}).
+    /// ECS cluster name (supports {mode} template, defaults to guss-cluster-{mode}).
     #[serde(default)]
     pub cluster: String,
     /// AWS region for ECR/ECS operations (falls back to ssm::get_region()).
@@ -125,9 +125,10 @@ impl ClusterConfig {
                 self.containers.keys().cloned().collect::<Vec<_>>().join(", ")
             )
         })?;
-        let source = cfg.source.as_ref().ok_or_else(|| {
-            anyhow!("container '{}' in cluster '{}' requires explicit 'source' field", name, self.name)
-        })?;
+        let source = cfg
+            .source
+            .as_ref()
+            .ok_or_else(|| anyhow!("container '{}' in cluster '{}' requires explicit 'source' field", name, self.name))?;
         let container_name = cfg.alias.clone().unwrap_or_else(|| name.to_string());
         let config = cfg.config.as_ref().map(|p| root.join(p));
         Ok(ResolvedContainer {
@@ -142,16 +143,12 @@ impl ClusterConfig {
 
     /// Iterator over container names included in bulk operations.
     pub fn bulk_containers(&self) -> impl Iterator<Item = &str> {
-        self.containers
-            .iter()
-            .filter(|(_, c)| c.bulk)
-            .map(|(n, _)| n.as_str())
+        self.containers.iter().filter(|(_, c)| c.bulk).map(|(n, _)| n.as_str())
     }
 
     /// Load a cluster from a JSON file.
     fn load_file(path: &Path) -> Result<Self> {
-        let text = fs::read_to_string(path)
-            .map_err(|e| anyhow!("reading cluster config {}: {e}", path.display()))?;
+        let text = fs::read_to_string(path).map_err(|e| anyhow!("reading cluster config {}: {e}", path.display()))?;
         serde_json::from_str(&text).map_err(|e| anyhow!("{}: {e}", path.display()))
     }
 }
@@ -159,19 +156,13 @@ impl ClusterConfig {
 /// Load every cluster listed under [clusters] in config.toml.
 pub fn load() -> Result<Vec<ClusterConfig>> {
     let settings = config::Settings::load()?;
-    let root = paths::project_vhp()?;
+    let root = paths::project_guss()?;
 
     if settings.clusters.is_empty() {
-        return Err(anyhow!(
-            "no clusters configured under [clusters] in config.toml"
-        ));
+        return Err(anyhow!("no clusters configured under [clusters] in config.toml"));
     }
 
-    settings
-        .clusters
-        .iter()
-        .map(|rel| ClusterConfig::load_file(&root.join(rel)))
-        .collect()
+    settings.clusters.iter().map(|rel| ClusterConfig::load_file(&root.join(rel))).collect()
 }
 
 /// Find a cluster by name in a loaded set, returning an error with known names.
@@ -179,11 +170,7 @@ pub fn find<'a>(clusters: &'a [ClusterConfig], name: &str) -> Result<&'a Cluster
     clusters.iter().find(|c| c.name == name).ok_or_else(|| {
         anyhow!(
             "unknown cluster '{name}' (known: {})",
-            clusters
-                .iter()
-                .map(|c| c.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+            clusters.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ")
         )
     })
 }
@@ -194,11 +181,8 @@ mod tests {
 
     fn temp_dir(label: &str) -> PathBuf {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .subsec_nanos();
-        let dir = std::env::temp_dir().join(format!("vhp_clusters_test_{label}_{nanos}"));
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_nanos();
+        let dir = std::env::temp_dir().join(format!("guss_clusters_test_{label}_{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -220,9 +204,7 @@ mod tests {
         .unwrap();
 
         let cluster = ClusterConfig::load_file(&cluster_json).unwrap();
-        let resolved = cluster
-            .resolve("pluginrp", &dir, &dir.join("vapi_root"))
-            .unwrap();
+        let resolved = cluster.resolve("pluginrp", &dir, &dir.join("vapi_root")).unwrap();
 
         assert_eq!(resolved.name, "pluginrp");
         assert_eq!(resolved.source, dir.join("servers/vapi-pluginrp"));
@@ -248,9 +230,7 @@ mod tests {
         .unwrap();
 
         let cluster = ClusterConfig::load_file(&cluster_json).unwrap();
-        let resolved = cluster
-            .resolve("core", &dir, &dir.join("vapi_root"))
-            .unwrap();
+        let resolved = cluster.resolve("core", &dir, &dir.join("vapi_root")).unwrap();
 
         assert_eq!(resolved.name, "admin");
         assert_eq!(resolved.source, dir.join("servers/vapi-admin"));
@@ -275,9 +255,7 @@ mod tests {
         .unwrap();
 
         let cluster = ClusterConfig::load_file(&cluster_json).unwrap();
-        let resolved = cluster
-            .resolve("core-lb", &dir, &dir.join("vapi_root"))
-            .unwrap();
+        let resolved = cluster.resolve("core-lb", &dir, &dir.join("vapi_root")).unwrap();
 
         assert_eq!(resolved.name, "core-lb");
         assert_eq!(resolved.source, dir.join("network/test-cluster/core-lb"));
@@ -321,31 +299,17 @@ mod tests {
         let c1 = dir.join("c1.json");
         let c2 = dir.join("c2.json");
 
-        fs::write(
-            &c1,
-            r#"{ "name": "core", "compose": "test.yml", "containers": {} }"#,
-        )
-        .unwrap();
-        fs::write(
-            &c2,
-            r#"{ "name": "portal", "compose": "test.yml", "containers": {} }"#,
-        )
-        .unwrap();
+        fs::write(&c1, r#"{ "name": "core", "compose": "test.yml", "containers": {} }"#).unwrap();
+        fs::write(&c2, r#"{ "name": "portal", "compose": "test.yml", "containers": {} }"#).unwrap();
 
-        let clusters = vec![
-            ClusterConfig::load_file(&c1).unwrap(),
-            ClusterConfig::load_file(&c2).unwrap(),
-        ];
+        let clusters = vec![ClusterConfig::load_file(&c1).unwrap(), ClusterConfig::load_file(&c2).unwrap()];
 
         let found = find(&clusters, "portal").unwrap();
         assert_eq!(found.name, "portal");
 
         let not_found = find(&clusters, "nope");
         assert!(not_found.is_err());
-        assert!(not_found
-            .unwrap_err()
-            .to_string()
-            .contains("known: core, portal"));
+        assert!(not_found.unwrap_err().to_string().contains("known: core, portal"));
 
         fs::remove_dir_all(&dir).unwrap();
     }

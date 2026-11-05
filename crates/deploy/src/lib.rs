@@ -245,7 +245,7 @@ fn tools_cmd_net(
 
 /// Parallel fan-out for multi-container runs.
 fn run_parallel(
-    resolved: Vec<clusters::ResolvedContainer>,
+    containers: Vec<clusters::ResolvedContainer>,
     cfg: &clusters::ClusterConfig,
     cluster: &str,
     is_full_bulk: bool,
@@ -256,7 +256,7 @@ fn run_parallel(
     root: &std::path::Path,
     versions_seen: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
-    for r in &resolved {
+    for r in &containers {
         ui::heading(&format!("{} status", r.name));
         if git::is_repo(&r.source) {
             println!("{}", git::run_optional(&r.source, &["status", "--short", "--branch"]));
@@ -264,16 +264,15 @@ fn run_parallel(
     }
 
     ui::heading("Ready to Deploy");
-    let names: Vec<&str> = resolved.iter().map(|r| r.name.as_str()).collect();
+    let names: Vec<&str> = containers.iter().map(|r| r.name.as_str()).collect();
     println!("  containers -> {}", names.join(", "));
     ui::require_confirm("Proceed with build?", yes)?;
 
     ui::heading("Building images");
     let mut build_handles = vec![];
-    for r in resolved.iter().cloned() {
+    for r in containers.iter().cloned() {
         let name = r.name.clone();
-        let m = mode;
-        let handle = thread::spawn(move || build_container(&r, m, dry_run, no_cache));
+        let handle = thread::spawn(move || build_container(&r, &mode, dry_run, no_cache));
         build_handles.push((name, handle));
     }
     let mut build_errors = vec![];
@@ -315,7 +314,7 @@ fn run_parallel(
 
         ui::heading("Pushing to ECR and deploying");
         let mut ecs_handles = vec![];
-        for r in resolved.iter().cloned() {
+        for r in containers.iter().cloned() {
             let name = r.name.clone();
             let m = mode;
             let c = cfg.clone();
@@ -359,7 +358,7 @@ fn run_parallel(
         // Net clusters: push to Docker Hub and deploy via SSM
         ui::heading("Pushing images");
         let mut push_handles = vec![];
-        for r in resolved.iter().cloned() {
+        for r in containers.iter().cloned() {
             let name = r.name.clone();
             let m = mode;
             let handle = thread::spawn(move || push_container(&r, m, dry_run));
@@ -391,7 +390,7 @@ fn run_parallel(
 
         ui::heading("Deploying containers");
         let mut deploy_handles = vec![];
-        for r in resolved.iter().cloned() {
+        for r in containers.iter().cloned() {
             let name = r.name.clone();
             let m = mode;
             let c = cluster.to_string();
@@ -441,7 +440,7 @@ fn run_parallel(
     Ok(())
 }
 
-fn build_container(r: &clusters::ResolvedContainer, mode: Option<config::Mode>, dry_run: bool, no_cache: bool) -> Result<()> {
+fn build_container(r: &clusters::ResolvedContainer, mode: &Option<config::Mode>, dry_run: bool, no_cache: bool) -> Result<()> {
     let image = if let Some(m) = mode {
         docker::image_name(&r.name, m.docker_tag())
     } else {

@@ -39,19 +39,19 @@ Installed in `~/.bashrc` under the `# guss-dev` marker (delete that block to und
 
 | Alias | Does |
 |---|---|
-| `v <args>` | build-and-run — always current, works from any directory |
-| `vv <args>` | run the prebuilt `target/debug/guss` — instant, stale until `vb` |
-| `vb` | `cargo build --workspace` |
-| `vt` | `cargo test --workspace` |
-| `vfresh <args>` | run against a throwaway `HOME` (`/tmp/guss-fresh`) |
+| `g <args>` | build-and-run — always current, works from any directory |
+| `gg <args>` | run the prebuilt `target/debug/guss` — instant, stale until `vb` |
+| `gb` | `cargo build --workspace` |
+| `gt` | `cargo test --workspace` |
+| `gfresh <args>` | run against a throwaway `HOME` (`/tmp/guss-fresh`) |
 
-`v` uses `--manifest-path` rather than `cd`, so **your working directory is
+`g` uses `--manifest-path` rather than `cd`, so **your working directory is
 preserved** — which matters, because some commands detect their context by walking
 up from the cwd.
 
 ```bash
-v setup status
-v deploy local --help
+g setup status
+g deploy local --help
 ```
 
 ---
@@ -59,10 +59,10 @@ v deploy local --help
 ## Testing
 
 ```bash
-vt                                  # everything
+gt                                  # everything
 cargo test -p deploy --lib          # one crate
 cargo test -p setup --lib -- --nocapture
-vt require_confirm                  # by name substring
+gt require_confirm                  # by name substring
 ```
 
 ### Isolating from your real machine
@@ -87,10 +87,9 @@ Every mutating subcommand takes `--dry-run` (print the command, change nothing) 
 to paste.
 
 ```bash
-v deploy local --tools up --dry-run
-v setup publish --dry-run --yes
+g deploy local --tools up --dry-run
+g setup publish --dry-run --yes
 ```
-
 ---
 
 ## House conventions
@@ -174,10 +173,10 @@ If something is hard to test, it usually wants this split rather than a mock.
 ## Before you commit
 
 ```bash
-vb && vt                            # build clean, all tests green
-v setup status                      # gate reports "not configured"
-v deploy local --help               # config still resolves
-vfresh setup init --root ~/guss/project-guss --no-pull --yes   # first-run path intact
+gb && gt                            # build clean, all tests green
+g setup status                      # gate reports "not configured"
+g deploy local --help               # config still resolves
+gfresh setup init --root ~/<project> --no-pull --yes   # first-run path intact
 ```
 
 The last one is worth the ten seconds: most of what breaks in this tool breaks for

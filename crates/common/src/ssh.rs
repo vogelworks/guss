@@ -52,7 +52,7 @@ pub fn write_config(bastion_ip: &str, mykey: &str, dry_run: bool) -> Result<()> 
     Ok(())
 }
 
-/// Open an interactive ssh session to `host` (the `bastion.sh` behavior).
+/// Open an interactive ssh session to `host`.
 pub fn connect(host: &str) -> Result<()> {
     proc::run("ssh", &[host], false)
 }
